@@ -1,0 +1,296 @@
+{
+  "snapshot_date": "2026-08-08",
+  "purpose": "Verified source data for building a runnable optimizer input; projections are intentionally not invented.",
+  "sources": {
+    "mfl_league": "https://www49.myfantasyleague.com/2026/home/79286",
+    "mfl_rosters_api": "https://www49.myfantasyleague.com/2026/export?TYPE=rosters&L=79286&JSON=1",
+    "mfl_rules_api": "https://www49.myfantasyleague.com/2026/export?TYPE=rules&L=79286&JSON=1",
+    "google_rules_document": "https://docs.google.com/document/d/1UnTCMrEn7Wx5ofw_mG_ke_htdtVIY1LZWr907Cx8gn8/edit",
+    "google_league_spreadsheet": "https://docs.google.com/spreadsheets/d/1XJGD2QoPaKLeW8K2_eIA4kfTLtpEmux_UPIucikklVM/edit"
+  },
+  "league": {
+    "id": "79286",
+    "name": "I Paid What For Who?",
+    "platform": "MyFantasyLeague",
+    "team_count": 12,
+    "keeper_type": "dynasty",
+    "salary_cap": 250,
+    "salary_cap_type_in_mfl": "soft",
+    "active_roster_limit": 26,
+    "injured_reserve_limit": 3,
+    "taxi_squad_limit": 4,
+    "faab_budget": 100,
+    "partial_lineups_allowed": true,
+    "roster_position_limits": "none",
+    "ir_eligible_mfl_statuses": ["IR", "OUT", "DOUBTFUL"],
+    "salary_cap_multipliers": {
+      "ROSTER": 1,
+      "INJURED_RESERVE": 0.5,
+      "TAXI_SQUAD": 0
+    },
+    "starting_lineup_2026": [
+      {"name": "QB", "count": 1, "eligible_positions": ["QB"]},
+      {"name": "RB", "count": 2, "eligible_positions": ["RB"]},
+      {"name": "WR", "count": 2, "eligible_positions": ["WR"]},
+      {"name": "TE", "count": 1, "eligible_positions": ["TE"]},
+      {"name": "OFFENSIVE_FLEX", "count": 1, "eligible_positions": ["RB", "WR", "TE"]},
+      {"name": "DL", "count": 1, "eligible_positions": ["DT", "DE"]},
+      {"name": "LB", "count": 1, "eligible_positions": ["LB"]},
+      {"name": "DB", "count": 1, "eligible_positions": ["CB", "S"]},
+      {"name": "IDP_FLEX", "count": 3, "eligible_positions": ["DT", "DE", "LB", "CB", "S"]}
+    ],
+    "starting_lineup_change_2028": {
+      "effective_year": 2028,
+      "description": "Phase out the dedicated TE position in favor of a WR/TE combo slot.",
+      "replace_slot": "TE",
+      "with_slot": {"name": "WR_TE", "count": 1, "eligible_positions": ["WR", "TE"]}
+    }
+  },
+  "franchise": {
+    "id": "0005",
+    "name": "Team McLean",
+    "mfl_username": "tyler360",
+    "league_sheet_username": "Atomictyler",
+    "active_players": 24,
+    "injured_reserve_players": 2,
+    "taxi_squad_players": 4,
+    "active_salary": 231,
+    "injured_reserve_cap_hit": 9,
+    "taxi_squad_cap_hit": 0,
+    "total_cap_hit": 240,
+    "current_cap_space": 10
+  },
+  "roster": [
+    {"id": "15751", "name": "Drake London", "position": "WR", "nfl_team": "ATL", "salary": 25, "status": "ROSTER"},
+    {"id": "15418", "name": "Camryn Bynum", "position": "S", "nfl_team": "IND", "salary": 5, "status": "ROSTER"},
+    {"id": "13604", "name": "Saquon Barkley", "position": "RB", "nfl_team": "PHI", "salary": 39, "status": "ROSTER"},
+    {"id": "16167", "name": "De'Von Achane", "position": "RB", "nfl_team": "MIA", "salary": 18, "status": "ROSTER"},
+    {"id": "15355", "name": "Nick Bolton", "position": "LB", "nfl_team": "KCC", "salary": 6, "status": "ROSTER"},
+    {"id": "16598", "name": "Bucky Irving", "position": "RB", "nfl_team": "TBB", "salary": 5, "status": "ROSTER"},
+    {"id": "15761", "name": "Khalil Shakir", "position": "WR", "nfl_team": "BUF", "salary": 5, "status": "ROSTER"},
+    {"id": "11150", "name": "Geno Smith", "position": "QB", "nfl_team": "NYJ", "salary": 3, "status": "ROSTER"},
+    {"id": "14169", "name": "Mack Wilson", "position": "LB", "nfl_team": "ARI", "salary": 5, "status": "ROSTER"},
+    {"id": "15861", "name": "Nik Bonitto", "position": "DE", "nfl_team": "DEN", "salary": 5, "status": "ROSTER"},
+    {"id": "13681", "name": "Bradley Chubb", "position": "DE", "nfl_team": "BUF", "salary": 6, "status": "ROSTER"},
+    {"id": "17074", "name": "Travis Hunter", "position": "WR", "nfl_team": "JAC", "salary": 19, "status": "ROSTER"},
+    {"id": "16287", "name": "Tre Tucker", "position": "WR", "nfl_team": "LVR", "salary": 6, "status": "ROSTER"},
+    {"id": "17070", "name": "Luther Burden", "position": "WR", "nfl_team": "CHI", "salary": 14, "status": "ROSTER"},
+    {"id": "14137", "name": "Noah Fant", "position": "TE", "nfl_team": "NOS", "salary": 2, "status": "ROSTER"},
+    {"id": "13193", "name": "Jonnu Smith", "position": "TE", "nfl_team": "FA", "salary": 2, "status": "ROSTER"},
+    {"id": "14249", "name": "Andrew Van Ginkel", "position": "DE", "nfl_team": "MIN", "salary": 5, "status": "ROSTER"},
+    {"id": "14251", "name": "Blake Cashman", "position": "LB", "nfl_team": "MIN", "salary": 4, "status": "ROSTER"},
+    {"id": "15409", "name": "Derrick Barnes", "position": "LB", "nfl_team": "DET", "salary": 4, "status": "ROSTER"},
+    {"id": "15850", "name": "Jalen Pitre", "position": "S", "nfl_team": "HOU", "salary": 3, "status": "ROSTER"},
+    {"id": "17039", "name": "Tyler Shough", "position": "QB", "nfl_team": "NOS", "salary": 4, "status": "ROSTER"},
+    {"id": "14777", "name": "Joe Burrow", "position": "QB", "nfl_team": "CIN", "salary": 23, "status": "ROSTER"},
+    {"id": "17046", "name": "Devin Neal", "position": "RB", "nfl_team": "NOS", "salary": 2, "status": "ROSTER"},
+    {"id": "16615", "name": "Malik Nabers", "position": "WR", "nfl_team": "NYG", "salary": 21, "status": "ROSTER"},
+    {"id": "13299", "name": "George Kittle", "position": "TE", "nfl_team": "SFO", "salary": 10, "status": "INJURED_RESERVE", "current_cap_hit": 5},
+    {"id": "16215", "name": "Luke Musgrave", "position": "TE", "nfl_team": "GBP", "salary": 8, "status": "INJURED_RESERVE", "current_cap_hit": 4},
+    {"id": "16626", "name": "Adonai Mitchell", "position": "WR", "nfl_team": "NYJ", "salary": 11, "status": "TAXI_SQUAD", "current_cap_hit": 0, "rookie_year": 2024},
+    {"id": "16788", "name": "Devaughn Vele", "position": "WR", "nfl_team": "NOS", "salary": 5, "status": "TAXI_SQUAD", "current_cap_hit": 0, "rookie_year": 2024},
+    {"id": "17107", "name": "Terrance Ferguson", "position": "TE", "nfl_team": "LAR", "salary": 2, "status": "TAXI_SQUAD", "current_cap_hit": 0, "rookie_year": 2025},
+    {"id": "17064", "name": "Jarquez Hunter", "position": "RB", "nfl_team": "LAR", "salary": 4, "status": "TAXI_SQUAD", "current_cap_hit": 0, "rookie_year": 2025}
+  ],
+  "historical_points": {
+    "source": "Archived MFL playerScores YTD endpoints plus Player Stats scoring averages for league 79286",
+    "seasons": [
+      {
+        "season": 2022,
+        "by_player_id": {"14777": 335.1, "11150": 287.6, "15355": 254.85, "13604": 253.5, "15850": 244.28, "13299": 162.1, "15751": 131.35, "15418": 129.88, "13681": 115.5, "14137": 93.6, "14249": 74.92, "15409": 65.5, "14251": 60.25, "14169": 55.25, "13193": 39.74, "15761": 29.58, "15861": 29.25},
+        "games_played_by_player_id": {"14777": 15, "11150": 16, "15355": 16, "13604": 16, "15850": 16, "13299": 14, "15751": 16, "15418": 16, "13681": 15, "14137": 16, "14249": 16, "15409": 14, "14251": 15, "14169": 16, "13193": 14, "15761": 13, "15861": 14}
+      },
+      {
+        "season": 2023,
+        "by_player_id": {"15418": 222.75, "11150": 206.28, "13681": 205, "13604": 180, "14249": 175.73, "13299": 172.2, "16167": 164.6, "14251": 161.58, "14777": 146.66, "15751": 138.28, "15850": 131.63, "15861": 113.75, "15409": 105.75, "13193": 93.3, "15355": 91.29, "15761": 85.5, "14169": 82, "16287": 57.55, "14137": 57.4, "16215": 56.6},
+        "games_played_by_player_id": {"15418": 16, "11150": 14, "13681": 16, "13604": 13, "14249": 16, "13299": 16, "16167": 10, "14251": 13, "14777": 10, "15751": 15, "15850": 14, "15861": 14, "15409": 15, "13193": 16, "15355": 8, "15761": 16, "14169": 16, "16287": 15, "14137": 16, "16215": 10}
+      },
+      {
+        "season": 2024,
+        "by_player_id": {"14777": 353.72, "13604": 342.3, "16167": 243.58, "11150": 231.8, "14249": 228.67, "16598": 218.04, "15355": 205.5, "15751": 203.1, "16615": 202.2, "13299": 198.4, "14251": 193.39, "15861": 191.59, "13193": 162.95, "15418": 156.12, "15761": 144.5, "14169": 133, "15850": 129.65, "16287": 108.53, "16788": 74.5, "14137": 68.2, "16626": 40.26, "15409": 16.5, "16215": 5.6, "13681": 0},
+        "games_played_by_player_id": {"14777": 16, "13604": 16, "16167": 16, "11150": 16, "14249": 16, "16598": 16, "15355": 16, "15751": 16, "16615": 14, "13299": 14, "14251": 13, "15861": 16, "13193": 16, "15418": 16, "15761": 15, "14169": 15, "15850": 12, "16287": 16, "16788": 12, "14137": 13, "16626": 16, "15409": 3, "16215": 6, "13681": 0}
+      },
+      {
+        "season": 2025,
+        "by_player_id": {"16167": 293.8, "13604": 217.3, "15355": 215.75, "11150": 173.82, "14251": 167.75, "15861": 158, "15418": 157.88, "15751": 155.1, "15850": 152.22, "14249": 146.1, "15761": 138.36, "17039": 135.62, "16287": 134.68, "15409": 134.67, "13299": 129.1, "13681": 125.33, "14777": 113.32, "16598": 113.2, "17070": 107.32, "14169": 105.61, "17074": 76.3, "16626": 75.9, "13193": 65.3, "17046": 59.08, "14137": 58.8, "16788": 55.3, "16615": 51.1, "17107": 46.6, "16215": 35.2, "17064": 0},
+        "games_played_by_player_id": {"16167": 16, "13604": 16, "15355": 16, "11150": 15, "14251": 12, "15861": 16, "15418": 16, "15751": 11, "15850": 13, "14249": 11, "15761": 16, "17039": 10, "16287": 16, "15409": 16, "13299": 10, "13681": 16, "14777": 7, "16598": 9, "17070": 14, "14169": 8, "17074": 7, "16626": 15, "13193": 16, "17046": 10, "14137": 14, "16788": 13, "16615": 4, "17107": 14, "16215": 16, "17064": 0}
+      }
+    ],
+    "modeling_note": "The historical fallback uses league-scored points per game, pooled by games played with 4/3/2/1 season recency weights over up to four seasons. This prevents missed injury games from being treated as zero production while giving larger samples more influence."
+  },
+  "replacement_levels": {
+    "source": "Current 2026 MFL unrostered player pool combined with archived 2022-2025 league-scored Player Stats",
+    "method": "Third-highest recency-weighted PPG among currently unrostered players at each position with at least eight historical scoring appearances and a current NFL team",
+    "minimum_historical_games": 8,
+    "points_per_game_by_position": {
+      "QB": 14.05,
+      "RB": 8.21,
+      "WR": 10.83,
+      "TE": 7.01,
+      "DT": 9.38,
+      "DE": 9.72,
+      "LB": 11.59,
+      "CB": 11.08,
+      "S": 11.15
+    }
+  },
+  "birthdates_unix": {
+    "11150": 655534800,
+    "13193": 809067600,
+    "13299": 750142800,
+    "13604": 855464400,
+    "13681": 835592400,
+    "14137": 880002000,
+    "14169": 887432400,
+    "14249": 804574800,
+    "14251": 831704400,
+    "14777": 850194000,
+    "15355": 952664400,
+    "15409": 927954000,
+    "15418": 900824400,
+    "15751": 995950800,
+    "15761": 949554000,
+    "15850": 928386000,
+    "15861": 938322000,
+    "16167": 1002949200,
+    "16215": 967870800,
+    "16287": 984027600,
+    "16598": 1029729600,
+    "16615": 1059364800,
+    "16626": 1034049600,
+    "16788": 881902800,
+    "17039": 938494800,
+    "17046": 1060660800,
+    "17064": 1041138000,
+    "17070": 1071205200,
+    "17074": 1053230400,
+    "17107": 1047013200
+  },
+  
+  "projections": {
+    "season": 2026,
+    "source": "",
+    "by_player_id": {},
+    "note": "Populate this map with league-scored season projections. MFL did not expose projected scores for this league on the snapshot date."
+  },
+  "draft": {
+    "status": "not_scheduled",
+    "mfl_message": "Draft has not been scheduled yet.",
+    "availability_poll_window": {
+      "start": "2026-08-14",
+      "end": "2026-09-09",
+      "source_sheet": "2026 Draft Schedule"
+    },
+    "current_year_picks": [
+      {"pick": "1.06", "overall": 6, "salary": 15, "original_owner": "Team McLean"},
+      {"pick": "1.07", "overall": 7, "salary": 15, "original_owner": "STRAIGHT BASS HOMIE"},
+      {"pick": "2.06", "overall": 18, "salary": 7, "original_owner": "Team McLean"},
+      {"pick": "3.01", "overall": 26, "salary": 3, "original_owner": "1017 BRICK SQUAD"},
+      {"pick": "3.06", "overall": 31, "salary": 3, "original_owner": "Team McLean"},
+      {"pick": "3.07", "overall": 32, "salary": 3, "original_owner": "STRAIGHT BASS HOMIE"},
+      {"pick": "4.07", "overall": 44, "salary": 1, "original_owner": "Team McLean"},
+      {"pick": "5.06", "overall": 55, "salary": 1, "original_owner": "Team McLean"},
+      {"pick": "6.07", "overall": 68, "salary": 1, "original_owner": "Team McLean"},
+      {"pick": "7.06", "overall": 79, "salary": 1, "original_owner": "Team McLean"},
+      {"pick": "8.07", "overall": 92, "salary": 1, "original_owner": "Team McLean"}
+    ],
+    "future_pick_inventory": [
+      {"year": 2027, "rounds": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "original_owner": "Team McLean"},
+      {"year": 2028, "rounds": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "original_owner": "Team McLean"}
+    ],
+    "rookie_salary_schedule": [
+      {"selection_range": "1.01-1.04", "salary": 17},
+      {"selection_range": "1.05-1.08", "salary": 15},
+      {"selection_range": "1.09-1.12", "salary": 13},
+      {"selection_range": "2.01-2.04", "salary": 9},
+      {"selection_range": "2.05-2.08", "salary": 7},
+      {"selection_range": "2.09-2.12", "salary": 5},
+      {"selection_range": "2.13", "salary": 4},
+      {"selection_range": "round 3", "salary": 3},
+      {"selection_range": "round 4+", "salary": 1}
+    ],
+    "format": {
+      "rounds_1_and_2": "non-snake",
+      "rounds_3_and_later": "snake",
+      "participation": "voluntary"
+    }
+  },
+  "available_rookie_pool": {
+    "mfl_draft_year": 2026,
+    "unrostered_supported_position_count": 275,
+    "counts_by_position": {"QB": 16, "RB": 36, "WR": 61, "TE": 28, "DT": 29, "DE": 28, "LB": 30, "CB": 27, "S": 20},
+    "note": "MFL identifies the player pool but does not provide the multi-year projections required by the optimizer. Do not rank these players until projections are added."
+  },
+  "scoring": {
+    "offense": {
+      "passing_yards": 0.04,
+      "passing_touchdown": 4,
+      "interception_thrown": -2,
+      "passing_two_point_conversion": 2,
+      "rushing_yards": 0.1,
+      "rushing_touchdown": 6,
+      "rushing_two_point_conversion": 2,
+      "receiving_yards": 0.1,
+      "reception": 0.5,
+      "receiving_touchdown": 6,
+      "receiving_two_point_conversion": 2,
+      "kick_or_punt_return_yards": 0.04,
+      "kick_or_punt_return_touchdown": 6,
+      "fumble_lost": -2,
+      "opponent_fumble_recovery": 2,
+      "opponent_fumble_recovery_yards": 0.04,
+      "own_fumble_recovery": 2,
+      "own_fumble_recovery_yards": 0.04
+    },
+    "idp": {
+      "solo_tackle": 1.5,
+      "assisted_tackle": 0.75,
+      "sack": 4,
+      "quarterback_hit": 0.75,
+      "tackle_for_loss": 2,
+      "pass_defensed": 3,
+      "interception": 6,
+      "interception_total_with_pass_defensed": 9,
+      "forced_fumble": 4,
+      "fumble_recovery_documented": 2,
+      "safety": 6,
+      "blocked_kick": 6,
+      "touchdown": 6,
+      "defensive_conversion_return": 2
+    }
+  },
+  "model_relevant_rules": {
+    "annual_salary_escalation": "Increase each retained player's salary by the greater of $1 or 10% of current salary rounded to the nearest whole dollar.",
+    "ir_salary_discount": "IR players count at 50% of salary.",
+    "taxi_salary_discount": "Taxi players count at 0% of salary.",
+    "taxi_eligibility": "Rookies and sophomores who have never started a fantasy match remain taxi eligible; starting a player permanently ends taxi eligibility.",
+    "taxi_eligibility_mfl_enforcement": "MFL permits players with less than two years of experience; the never-started restriction is enforced by league rule outside MFL.",
+    "draft_roster_workaround": "Temporary bench slots are added for the rookie draft. They must be cleared after the draft through legal roster/taxi moves, not by dropping players from the temporary slots.",
+    "pre_draft_compliance": "Teams must be under the cap with compliant IR and taxi squads 72 hours before the first draft.",
+    "drop_lock": "Drops are barred beginning 48 hours before each draft.",
+    "insufficient_cap_at_pick": "A team that cannot afford the salary attached to a rookie pick cannot use that pick; it must trade the pick or clear cap space before the draft.",
+    "rookie_draft_over_cap_remedy": "If drafted rookies leave a team unable to clear the cap, the team drops just-drafted rookies in reverse draft order until compliant.",
+    "future_pick_trading": "Picks may be traded up to two years ahead after dues for those years are paid."
+  },
+  "source_reconciliation": [
+    "The old roster paragraph in the rules document says 28 including IR; the explicit 2026 amendment and current MFL configuration set the active roster limit to 26, plus 3 IR and 4 taxi.",
+    "The 2026 draft is not yet scheduled in MFL. The spreadsheet is an availability poll, not a confirmed date.",
+    "MFL is treated as authoritative for current player status and salary; the Google rules document is authoritative for future rule changes and league procedures.",
+    "MFL labels the salary cap as soft even though league rules require owners to remain at or below $250 and prescribe remedies for violations; the optimizer should enforce $250 as a hard feasibility constraint.",
+    "MFL currently accepts IR, out, or doubtful players in IR. The rules document's 2025 amendment likewise expands IR to include doubtful players.",
+    "Historical production totals use each archived season's playerScores YTD endpoint; scoring appearances are derived from the same season's MFL Player Stats total and average columns. Some 2025 totals differ from the 2026 roster page's recalculated 2025 PTS column.",
+    "Replacement PPG uses the third-best currently unrostered option at each exact position, rather than assuming that a dropped player's production disappears with no replacement.",
+    "The model must add explicit active, IR, and taxi placement before this source snapshot can be converted without losing salary and eligibility behavior."
+  ],
+  "dynasty_project_tab_verification": {
+    "verified_at": "2026-08-08",
+    "tabs": [
+      "Team McLean roster",
+      "2026 draft results",
+      "league scoring",
+      "league settings",
+      "Google league rules document"
+    ],
+    "result": "The grouped tabs corroborated the source snapshot and supplied historical points plus MFL enforcement details."
+  }
+}

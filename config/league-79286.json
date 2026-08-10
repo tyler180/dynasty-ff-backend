@@ -1,0 +1,19 @@
+{
+  "league_id": "79286",
+  "salary_cap_multipliers": {
+    "ROSTER": 1,
+    "INJURED_RESERVE": 0.5,
+    "TAXI_SQUAD": 0
+  },
+  "rookie_salary_schedule": [
+    {"selection_range": "1.01-1.04", "salary": 17},
+    {"selection_range": "1.05-1.08", "salary": 15},
+    {"selection_range": "1.09-1.12", "salary": 13},
+    {"selection_range": "2.01-2.04", "salary": 9},
+    {"selection_range": "2.05-2.08", "salary": 7},
+    {"selection_range": "2.09-2.12", "salary": 5},
+    {"selection_range": "2.13", "salary": 4},
+    {"selection_range": "round 3", "salary": 3},
+    {"selection_range": "round 4+", "salary": 1}
+  ]
+}
