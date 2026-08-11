@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
+
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/golang@master
         env:
@@ -52,10 +53,13 @@ jobs:
       - name: Build
         run: go build ./...
 
-
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
 
     defaults:
       run:
@@ -64,6 +68,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::138013422358:role/github-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
@@ -78,8 +91,7 @@ jobs:
         run: terraform validate
 
       - name: Terraform plan
-        run: terraform plan
-
+        run: terraform plan -input=false
 
   publish:
     name: Build and publish
@@ -100,7 +112,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: arn:aws:iam::138013422358:role/github-deploy
           aws-region: ${{ env.AWS_REGION }}
