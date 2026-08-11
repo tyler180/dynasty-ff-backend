@@ -14,7 +14,7 @@ permissions:
 
 env:
   AWS_REGION: us-west-2
-  ECR_REPOSITORY: dynasty-ff-backend
+  ECR_REPOSITORY: dynasty-ff-backend-dev
 
 jobs:
 
