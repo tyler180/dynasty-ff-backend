@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/tylermclean/dynasty-ff-backend/internal/analysis/source"
-	"github.com/tylermclean/dynasty-ff-backend/internal/provider/mfl"
+	"github.com/tyler180/dynasty-ff-backend/internal/analysis/source"
+	mflsync "github.com/tyler180/dynasty-ff-backend/internal/provider/mfl"
 )
 
 type LoadOptions struct {

@@ -5,7 +5,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/tylermclean/dynasty-ff-backend/internal/identity/player"
+	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
 )
 
 // PlayerGameSnaps is one player's participation in one NFL game. Percentages

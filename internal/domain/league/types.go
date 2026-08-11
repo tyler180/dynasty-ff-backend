@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tylermclean/dynasty-ff-backend/internal/identity/player"
+	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
 )
 
 type ID string

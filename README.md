@@ -3,7 +3,7 @@
 The application and data-integration layer for dynasty-football analysis. This
 repository owns provider ingestion, canonical player identity, persistence,
 league snapshots, roster analysis, and deployment infrastructure. The
-deterministic optimizer remains in `dynasty-ff-draft-model` and is consumed
+deterministic optimizer remains in `dynasty-ff-models` and is consumed
 through its public `draft` package.
 
 ## Repository boundary

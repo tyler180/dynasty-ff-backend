@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tylermclean/dynasty-ff-backend/internal/analysis/source"
-	"github.com/tylermclean/dynasty-ff-backend/internal/domain/league"
-	"github.com/tylermclean/dynasty-ff-backend/internal/identity"
-	"github.com/tylermclean/dynasty-ff-backend/internal/identity/player"
+	"github.com/tyler180/dynasty-ff-backend/internal/analysis/source"
+	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
+	"github.com/tyler180/dynasty-ff-backend/internal/identity"
+	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
 )
 
 // PlayerResolver is the identity capability needed to translate provider IDs

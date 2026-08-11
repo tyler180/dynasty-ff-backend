@@ -14,7 +14,7 @@ permissions:
 
 env:
   AWS_REGION: us-west-2
-  ECR_REPOSITORY: my-app
+  ECR_REPOSITORY: dynasty-ff-backend
 
 jobs:
 
@@ -48,7 +48,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: terraform
+        working-directory: infrastructure/terraform
 
     steps:
       - name: Checkout

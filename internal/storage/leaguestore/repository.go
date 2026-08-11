@@ -5,7 +5,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/tylermclean/dynasty-ff-backend/internal/domain/league"
+	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
 )
 
 type Reader interface {

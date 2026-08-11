@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tylermclean/dynasty-ff-backend/internal/analysis/source"
+	"github.com/tyler180/dynasty-ff-backend/internal/analysis/source"
 )
 
 type fakeCaller struct {

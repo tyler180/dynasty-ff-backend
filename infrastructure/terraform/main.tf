@@ -1,9 +1,9 @@
-module "ffnotifier_lambda_function" {
+module "dynasty_ff_backend_lambda" {
   source  = "terraform-aws-modules/lambda/aws"
-  version = "7.14.0"
+  version = "8.8.0"
 
-  function_name          = "fantasy-football-notifier"
-  description            = "My awesome lambda function"
+  function_name          = "dynasty-ff-backend"
+  description            = "Dynasty Fantasy Football Backend Lambda Function"
   handler                = "index.lambdaHandler"
   runtime                = "provided.al2023"
   ephemeral_storage_size = 10240
@@ -11,7 +11,7 @@ module "ffnotifier_lambda_function" {
   publish                = true
   create_package         = false
   trusted_entities       = ["scheduler.amazonaws.com"]
-  local_existing_package = "${path.module}/ffnotifier/ffnotifier.zip"
+  # local_existing_package = "${path.module}/ffnotifier/ffnotifier.zip"
 
   source_path = "${path.module}/ffnotifier"
 

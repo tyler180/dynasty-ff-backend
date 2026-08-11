@@ -1,6 +1,6 @@
 FROM golang:1.26 AS build
 WORKDIR /src/dynasty-ff-backend
-COPY dynasty-ff-draft-model /src/dynasty-ff-draft-model
+COPY dynasty-ff-models /src/dynasty-ff-models
 COPY dynasty-ff-backend /src/dynasty-ff-backend
 RUN go build -o /out/dynasty-analyze ./cmd/analyze
 

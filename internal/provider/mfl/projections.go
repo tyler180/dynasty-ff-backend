@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/tylermclean/dynasty-ff-backend/internal/analysis/source"
+	"github.com/tyler180/dynasty-ff-backend/internal/analysis/source"
 )
 
 func LoadProjections(path string, defaultSeason int) (source.Projections, error) {

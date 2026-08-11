@@ -8,8 +8,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/tylermclean/dynasty-ff-backend/internal/identity"
-	"github.com/tylermclean/dynasty-ff-backend/internal/identity/player"
+	"github.com/tyler180/dynasty-ff-backend/internal/identity"
+	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
 )
 
 type fakeDynamoClient struct {

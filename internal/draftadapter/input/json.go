@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	draftmodel "github.com/tylermclean/dynasty-ff-draft-model/draft"
+	draftmodel "github.com/tyler180/dynasty-ff-models/draft"
 )
 
 func Read(path string) (draftmodel.Input, error) {

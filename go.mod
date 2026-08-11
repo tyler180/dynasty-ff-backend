@@ -1,4 +1,4 @@
-module github.com/tylermclean/dynasty-ff-backend
+module github.com/tyler180/dynasty-ff-backend
 
 go 1.26
 
@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.43.4
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.63.1
 	github.com/modelcontextprotocol/go-sdk v1.4.1
-	github.com/tylermclean/dynasty-ff-draft-model v0.0.0
+	github.com/tyler180/dynasty-ff-models v0.0.0
 )
 
 require (
@@ -23,4 +23,4 @@ require (
 	golang.org/x/sys v0.40.0 // indirect
 )
 
-replace github.com/tylermclean/dynasty-ff-draft-model => ../dynasty-ff-draft-model
+// replace github.com/tyler180/dynasty-ff-models => ../dynasty-ff-models

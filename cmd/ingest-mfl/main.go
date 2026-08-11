@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tylermclean/dynasty-ff-backend/internal/provider/mfl"
+	mflsync "github.com/tyler180/dynasty-ff-backend/internal/provider/mfl"
 )
 
 func main() {

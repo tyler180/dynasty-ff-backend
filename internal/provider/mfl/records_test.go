@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tylermclean/dynasty-ff-backend/internal/analysis/source"
-	"github.com/tylermclean/dynasty-ff-backend/internal/domain/league"
-	"github.com/tylermclean/dynasty-ff-backend/internal/identity/player"
+	"github.com/tyler180/dynasty-ff-backend/internal/analysis/source"
+	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
+	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
 )
 
 type mapPlayerResolver map[string]player.Profile
