@@ -4,9 +4,12 @@ locals {
   context = data.context_tags.backend
   name    = data.context_label.backend.rendered
 
-  source_path   = path.module
-  path_include  = ["**"]
-  path_exclude  = ["**/terraform/**"]
+  source_path = abspath("${path.module}/../..")
+  path_include = [
+    "dynasty-ff-backend/**",
+    "dynasty-ff-models/**",
+  ]
+  path_exclude  = ["dynasty-ff-backend/terraform/**"]
   files_include = setunion([for f in local.path_include : fileset(local.source_path, f)]...)
   files_exclude = setunion([for f in local.path_exclude : fileset(local.source_path, f)]...)
   files         = sort(setsubtract(local.files_include, local.files_exclude))

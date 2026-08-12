@@ -67,17 +67,29 @@ jobs:
     name: Terraform
     runs-on: ubuntu-latest
 
+    needs:
+      - go
+
     permissions:
       contents: read
       id-token: write
 
     defaults:
       run:
-        working-directory: terraform
+        working-directory: dynasty-ff-backend/terraform
 
     steps:
-      - name: Checkout
+      - name: Checkout backend
         uses: actions/checkout@v7
+        with:
+          path: dynasty-ff-backend
+
+      - name: Checkout models
+        uses: actions/checkout@v7
+        with:
+          repository: tyler180/dynasty-ff-models
+          token: ${{ secrets.GH_PRIVATE_REPOS_TOKEN }}
+          path: dynasty-ff-models
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
@@ -101,60 +113,9 @@ jobs:
         run: terraform validate
 
       - name: Terraform plan
+        if: github.event_name == 'pull_request'
         run: terraform plan -input=false
 
-  publish:
-    name: Build and publish
-    runs-on: ubuntu-latest
-
-    needs:
-      - go
-      - terraform
-
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - name: Checkout backend
-        uses: actions/checkout@v7
-        with:
-          path: dynasty-ff-backend
-
-      - name: Checkout models
-        uses: actions/checkout@v7
-        with:
-          repository: tyler180/dynasty-ff-models
-          token: ${{ secrets.GH_PRIVATE_REPOS_TOKEN }}
-          path: dynasty-ff-models
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          role-to-assume: arn:aws:iam::138013422358:role/github-deploy
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build image
-        env:
-          REGISTRY: ${{ steps.ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build \
-            --platform linux/amd64 \
-            -f dynasty-ff-backend/Dockerfile \
-            -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
-            .
-
-      - name: Push image
-        env:
-          REGISTRY: ${{ steps.ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker push \
-            "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+      - name: Terraform apply
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: terraform apply -auto-approve -input=false

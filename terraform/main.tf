@@ -46,8 +46,9 @@ module "ff_backend_build" {
   # use_image_tag = true
   # image_tag   = "2.0"
 
-  source_path = local.source_path
-  platform    = "linux/amd64"
+  source_path      = local.source_path
+  docker_file_path = "${local.source_path}/dynasty-ff-backend/Dockerfile"
+  platform         = "linux/amd64"
 
   triggers = {
     dir_sha = local.dir_sha
