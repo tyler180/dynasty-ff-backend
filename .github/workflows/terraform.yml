@@ -118,8 +118,17 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout
+      - name: Checkout backend
         uses: actions/checkout@v7
+        with:
+          path: dynasty-ff-backend
+
+      - name: Checkout models
+        uses: actions/checkout@v7
+        with:
+          repository: tyler180/dynasty-ff-models
+          token: ${{ secrets.GH_PRIVATE_REPOS_TOKEN }}
+          path: dynasty-ff-models
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
@@ -137,6 +146,8 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build \
+            --platform linux/amd64 \
+            -f dynasty-ff-backend/Dockerfile \
             -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
             .
 
