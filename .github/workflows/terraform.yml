@@ -69,11 +69,50 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Show GitHub OIDC claims
+        shell: bash
+        run: |
+          OIDC_RESPONSE="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com")"
+
+          export OIDC_RESPONSE
+
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+
+          token = json.loads(os.environ["OIDC_RESPONSE"])["value"]
+
+          payload = token.split(".")[1]
+          payload += "=" * (-len(payload) % 4)
+
+          claims = json.loads(base64.urlsafe_b64decode(payload))
+
+          for key in (
+              "iss",
+              "aud",
+              "sub",
+              "repository",
+              "ref",
+              "event_name",
+              "job_workflow_ref",
+          ):
+              print(f"{key}: {claims.get(key)}")
+          PY
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: arn:aws:iam::138013422358:role/github-deploy
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
