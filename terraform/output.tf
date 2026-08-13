@@ -31,10 +31,10 @@ output "mfl_secret_arn" {
   value       = module.secrets_manager.secret_arn
 }
 
-# output "source_path" {
-#   value = local.source_path
-# }
+output "source_path" {
+  value = local.source_path
+}
 
-# output "files" {
-#   value = local.files
-# }
+output "files" {
+  value = local.files
+}

@@ -82,13 +82,22 @@ jobs:
     # environment:
     #   name: dev
     steps:
-      - name: show pwd
+      - name: Show working directory before checkouts
         run: pwd
+
+      - name: Show files before checkouts
+        run: ls -la
 
       - name: Checkout backend
         uses: actions/checkout@v7
         # with:
         #   path: dynasty-ff-backend
+
+      - name: Show working directory after checkout
+        run: pwd
+
+      - name: Show files after checkout
+        run: ls -la
 
       - name: Checkout models
         uses: actions/checkout@v7
@@ -97,12 +106,24 @@ jobs:
           token: ${{ secrets.GH_PRIVATE_REPOS_TOKEN }}
           path: dynasty-ff-models
 
+      - name: Show working directory after models checkout
+        run: pwd
+
+      - name: Show files after models checkout
+        run: ls -la
+
       - name: Checkout read-only MFL MCP server
         uses: actions/checkout@v7
         with:
           repository: tyler180/mfl-mcp
           token: ${{ secrets.GH_PRIVATE_REPOS_TOKEN }}
-          path: mfl/mfl-mcp
+          path: mfl-mcp
+
+      - name: Show working directory after mfl-mcp checkout
+        run: pwd
+
+      - name: Show files after mfl-mcp checkout
+        run: ls -la
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
