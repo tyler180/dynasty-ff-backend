@@ -23,12 +23,17 @@ const (
 // Snapshot is league state as observed at a point in time. Historical
 // snapshots are immutable; a new observation produces a new snapshot.
 type Snapshot struct {
-	League      League             `json:"league"`
-	Franchise   Franchise          `json:"franchise"`
-	Roster      []RosterAssignment `json:"roster"`
-	DraftAssets []DraftAsset       `json:"draft_assets,omitempty"`
-	ObservedAt  time.Time          `json:"observed_at"`
-	Source      string             `json:"source"`
+	League                  League             `json:"league"`
+	Franchise               Franchise          `json:"franchise"`
+	Roster                  []RosterAssignment `json:"roster"`
+	DraftAssets             []DraftAsset       `json:"draft_assets,omitempty"`
+	DraftStatus             string             `json:"draft_status,omitempty"`
+	DraftAvailabilityWindow AvailabilityWindow `json:"draft_availability_window,omitempty"`
+	HistoricalPoints        HistoricalPoints   `json:"historical_points,omitempty"`
+	ReplacementLevels       ReplacementLevels  `json:"replacement_levels,omitempty"`
+	Projections             Projections        `json:"projections,omitempty"`
+	ObservedAt              time.Time          `json:"observed_at"`
+	Source                  string             `json:"source"`
 }
 
 type League struct {
@@ -49,9 +54,40 @@ type Franchise struct {
 type RosterAssignment struct {
 	PlayerID        player.ID    `json:"player_id"`
 	Status          RosterStatus `json:"status"`
+	Position        string       `json:"position,omitempty"`
+	NFLTeam         string       `json:"nfl_team,omitempty"`
 	Salary          float64      `json:"salary"`
 	CurrentCapHit   float64      `json:"current_cap_hit"`
 	ContractThrough int          `json:"contract_through,omitempty"`
+}
+
+type AvailabilityWindow struct {
+	Start string `json:"start,omitempty"`
+	End   string `json:"end,omitempty"`
+}
+
+type HistoricalPoints struct {
+	Source  string             `json:"source,omitempty"`
+	Seasons []HistoricalSeason `json:"seasons,omitempty"`
+}
+
+type HistoricalSeason struct {
+	Season                int                `json:"season"`
+	ByPlayerID            map[string]float64 `json:"by_player_id"`
+	GamesPlayedByPlayerID map[string]int     `json:"games_played_by_player_id,omitempty"`
+}
+
+type ReplacementLevels struct {
+	Source                  string             `json:"source,omitempty"`
+	Method                  string             `json:"method,omitempty"`
+	MinimumHistoricalGames  int                `json:"minimum_historical_games,omitempty"`
+	PointsPerGameByPosition map[string]float64 `json:"points_per_game_by_position,omitempty"`
+}
+
+type Projections struct {
+	Season     int                `json:"season,omitempty"`
+	Source     string             `json:"source,omitempty"`
+	ByPlayerID map[string]float64 `json:"by_player_id,omitempty"`
 }
 
 type DraftAsset struct {

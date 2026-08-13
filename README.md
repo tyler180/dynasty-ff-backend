@@ -155,6 +155,29 @@ and writes the normalized snapshot to S3:
 }
 ```
 
+Analyze the latest stored snapshot by joining its canonical roster IDs to the
+player profiles in DynamoDB:
+
+```json
+{
+  "action": "analyze",
+  "season": 2026,
+  "league_id": "79286",
+  "franchise_id": "0005",
+  "projection_fallback": "auto",
+  "cap_relief_target": 10
+}
+```
+
+`projection_fallback` accepts `auto`, `historical`, or `none`. `auto` uses the
+persisted MFL league-scored history when explicit projections are absent. The
+response includes the exact snapshot timestamp used, cap and roster compliance,
+draft-pick fit, taxi eligibility, and replacement-aware drop classifications.
+Rookie selection rankings remain unavailable until a rookie projection/value
+feed is persisted; the response reports that limitation rather than inventing
+rankings. Deploy this version and run `sync_mfl` once before the first analysis
+so the latest snapshot includes the newly persisted position and history facts.
+
 The Lambda reads its MFL credential from the configured Secrets Manager secret.
 The supported minimal secret shape is:
 

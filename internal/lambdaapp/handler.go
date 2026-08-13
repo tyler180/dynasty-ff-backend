@@ -9,6 +9,7 @@ import (
 
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
+	"github.com/tyler180/dynasty-ff-backend/internal/app/snapshotanalysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
@@ -27,38 +28,42 @@ const (
 	ActionPutIdentities  = "put_identities"
 	ActionSyncIdentities = "sync_identities"
 	ActionSyncMFL        = "sync_mfl"
+	ActionAnalyze        = "analyze"
 )
 
 type Request struct {
-	Action           string             `json:"action"`
-	Snapshot         *league.Snapshot   `json:"snapshot,omitempty"`
-	LeagueID         league.ID          `json:"league_id,omitempty"`
-	FranchiseID      league.FranchiseID `json:"franchise_id,omitempty"`
-	Season           int                `json:"season,omitempty"`
-	ObservedAt       string             `json:"observed_at,omitempty"`
-	Player           *player.Profile    `json:"player,omitempty"`
-	Alias            *identity.Alias    `json:"alias,omitempty"`
-	PlayerID         player.ID          `json:"player_id,omitempty"`
-	ExternalID       *player.ExternalID `json:"external_id,omitempty"`
-	Players          []player.Profile   `json:"players,omitempty"`
-	Aliases          []identity.Alias   `json:"aliases,omitempty"`
-	IncludeDraft     *bool              `json:"include_draft,omitempty"`
-	LiveDraft        bool               `json:"live_draft,omitempty"`
-	TimeoutSeconds   int                `json:"timeout_seconds,omitempty"`
-	LeagueConfigPath string             `json:"league_config_path,omitempty"`
-	Workers          int                `json:"workers,omitempty"`
+	Action             string             `json:"action"`
+	Snapshot           *league.Snapshot   `json:"snapshot,omitempty"`
+	LeagueID           league.ID          `json:"league_id,omitempty"`
+	FranchiseID        league.FranchiseID `json:"franchise_id,omitempty"`
+	Season             int                `json:"season,omitempty"`
+	ObservedAt         string             `json:"observed_at,omitempty"`
+	Player             *player.Profile    `json:"player,omitempty"`
+	Alias              *identity.Alias    `json:"alias,omitempty"`
+	PlayerID           player.ID          `json:"player_id,omitempty"`
+	ExternalID         *player.ExternalID `json:"external_id,omitempty"`
+	Players            []player.Profile   `json:"players,omitempty"`
+	Aliases            []identity.Alias   `json:"aliases,omitempty"`
+	IncludeDraft       *bool              `json:"include_draft,omitempty"`
+	LiveDraft          bool               `json:"live_draft,omitempty"`
+	TimeoutSeconds     int                `json:"timeout_seconds,omitempty"`
+	LeagueConfigPath   string             `json:"league_config_path,omitempty"`
+	Workers            int                `json:"workers,omitempty"`
+	CapReliefTarget    float64            `json:"cap_relief_target,omitempty"`
+	ProjectionFallback string             `json:"projection_fallback,omitempty"`
 }
 
 type Response struct {
-	Action        string               `json:"action"`
-	Status        string               `json:"status"`
-	Snapshot      *league.Snapshot     `json:"snapshot,omitempty"`
-	Player        *player.Profile      `json:"player,omitempty"`
-	Warnings      []string             `json:"warnings,omitempty"`
-	SyncedAt      *time.Time           `json:"synced_at,omitempty"`
-	StoredPlayers int                  `json:"stored_players,omitempty"`
-	StoredAliases int                  `json:"stored_aliases,omitempty"`
-	IdentitySync  *identitysync.Result `json:"identity_sync,omitempty"`
+	Action        string                   `json:"action"`
+	Status        string                   `json:"status"`
+	Snapshot      *league.Snapshot         `json:"snapshot,omitempty"`
+	Player        *player.Profile          `json:"player,omitempty"`
+	Warnings      []string                 `json:"warnings,omitempty"`
+	SyncedAt      *time.Time               `json:"synced_at,omitempty"`
+	StoredPlayers int                      `json:"stored_players,omitempty"`
+	StoredAliases int                      `json:"stored_aliases,omitempty"`
+	IdentitySync  *identitysync.Result     `json:"identity_sync,omitempty"`
+	Analysis      *snapshotanalysis.Result `json:"analysis,omitempty"`
 }
 
 type Syncer interface {
@@ -69,11 +74,21 @@ type IdentitySyncer interface {
 	Sync(context.Context, identitysync.Request) (identitysync.Result, error)
 }
 
+type Analyzer interface {
+	Analyze(context.Context, snapshotanalysis.Request) (snapshotanalysis.Result, error)
+}
+
 type Handler struct {
 	snapshots      leaguestore.Repository
 	identities     identity.Repository
 	syncer         Syncer
 	identitySyncer IdentitySyncer
+	analyzer       Analyzer
+}
+
+func (h *Handler) WithAnalyzer(analyzer Analyzer) *Handler {
+	h.analyzer = analyzer
+	return h
 }
 
 func (h *Handler) WithSyncer(syncer Syncer) *Handler {
@@ -215,6 +230,18 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 			Action: action, Status: "stored", Snapshot: &result.Snapshot,
 			Warnings: result.Warnings, SyncedAt: &result.SyncedAt,
 		}, nil
+	case ActionAnalyze:
+		if h.analyzer == nil {
+			return Response{}, fmt.Errorf("analysis is not configured")
+		}
+		result, err := h.analyzer.Analyze(ctx, snapshotanalysis.Request{
+			Year: request.Season, LeagueID: request.LeagueID, FranchiseID: request.FranchiseID,
+			CapReliefTarget: request.CapReliefTarget, ProjectionFallback: request.ProjectionFallback,
+		})
+		if err != nil {
+			return Response{}, err
+		}
+		return Response{Action: action, Status: "ok", Analysis: &result}, nil
 	default:
 		return Response{}, fmt.Errorf("unknown action %q", action)
 	}

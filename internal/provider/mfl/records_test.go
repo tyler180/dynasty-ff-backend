@@ -30,10 +30,19 @@ func TestNormalizeRecordsResolvesMFLIDsBeforeBuildingLeagueFacts(t *testing.T) {
 		},
 		Franchise: source.Franchise{ID: "0005", Name: "Team"},
 		Roster: []source.Player{{
-			ID: "15751", Name: "Drake London", Salary: 10, CurrentCapHit: 10, Status: "ROSTER", RookieYear: 2022,
+			ID: "15751", Name: "Drake London", Position: "WR", NFLTeam: "ATL",
+			Salary: 10, CurrentCapHit: 10, Status: "ROSTER", RookieYear: 2022,
 		}},
 		BirthdatesUnix: map[string]int64{"15751": time.Date(2001, 7, 24, 0, 0, 0, 0, time.UTC).Unix()},
-		Draft:          source.Draft{CurrentYearPicks: []source.Pick{{Pick: "1.06", Overall: 6, Salary: 15}}},
+		HistoricalPoints: source.HistoricalPoints{Source: "MFL", Seasons: []source.HistoricalSeason{{
+			Season: 2025, ByPlayerID: map[string]float64{"15751": 170}, GamesPlayedByPlayerID: map[string]int{"15751": 17},
+		}}},
+		ReplacementLevels: source.ReplacementLevels{Source: "MFL free agents", PointsPerGameByPosition: map[string]float64{"WR": 8}},
+		Projections:       source.Projections{Season: 2026, Source: "test", ByPlayerID: map[string]float64{"15751": 220}},
+		Draft: source.Draft{
+			Status: "scheduled", AvailabilityPollWindow: source.AvailabilityPollWindow{Start: "2026-08-20", End: "2026-08-21"},
+			CurrentYearPicks: []source.Pick{{Pick: "1.06", Overall: 6, Salary: 15}},
+		},
 	}
 	resolver := mapPlayerResolver{"15751": {ID: player.ID("player-123"), DisplayName: "Drake London"}}
 
@@ -47,6 +56,9 @@ func TestNormalizeRecordsResolvesMFLIDsBeforeBuildingLeagueFacts(t *testing.T) {
 	if records.LeagueSnapshot.Roster[0].Status != league.RosterActive {
 		t.Fatalf("roster status = %q, want active", records.LeagueSnapshot.Roster[0].Status)
 	}
+	if assignment := records.LeagueSnapshot.Roster[0]; assignment.Position != "WR" || assignment.NFLTeam != "ATL" {
+		t.Fatalf("roster facts = %+v", assignment)
+	}
 	if records.Players[0].BirthDate == nil || records.Players[0].RookieYear != 2022 {
 		t.Fatalf("legacy profile enrichment was not preserved: %+v", records.Players[0])
 	}
@@ -55,5 +67,15 @@ func TestNormalizeRecordsResolvesMFLIDsBeforeBuildingLeagueFacts(t *testing.T) {
 	}
 	if asset := records.LeagueSnapshot.DraftAssets[0]; asset.Round != 1 || asset.Pick != 6 || asset.Overall != 6 {
 		t.Fatalf("draft asset = %+v", asset)
+	}
+	canonicalID := "player-123"
+	if got := records.LeagueSnapshot.HistoricalPoints.Seasons[0].ByPlayerID[canonicalID]; got != 170 {
+		t.Fatalf("canonical historical points = %v", got)
+	}
+	if got := records.LeagueSnapshot.Projections.ByPlayerID[canonicalID]; got != 220 {
+		t.Fatalf("canonical projection = %v", got)
+	}
+	if records.LeagueSnapshot.DraftStatus != "scheduled" || records.LeagueSnapshot.DraftAvailabilityWindow.Start != "2026-08-20" {
+		t.Fatalf("draft state = %+v", records.LeagueSnapshot)
 	}
 }

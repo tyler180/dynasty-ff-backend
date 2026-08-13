@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
+	"github.com/tyler180/dynasty-ff-backend/internal/app/snapshotanalysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/lambdaapp"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/dynastyprocess"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/mflcredentials"
@@ -76,6 +77,7 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 		Source: identitySource, Repository: identities, BulkResolver: identities,
 		RelevantPlayers: mflidentity.Source{MCPCommand: mcpCommand, Credentials: credentials},
 	})
+	handler.WithAnalyzer(snapshotanalysis.Service{Snapshots: snapshots, Players: identities})
 	return handler.WithSyncer(mflingest.Service{
 		MCPCommand: mcpCommand, Credentials: credentials,
 		Identities: identities, Snapshots: snapshots,
