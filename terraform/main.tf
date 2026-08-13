@@ -49,7 +49,7 @@ module "ff_backend_lambda" {
     IDENTITY_SOURCE_URL   = "https://raw.githubusercontent.com/DynastyProcess/data/master/files/db_playerids.csv"
   }
 
-  timeout = 300
+  timeout = 900
 
   attach_cloudwatch_logs_policy = true
   attach_policy_json            = true
