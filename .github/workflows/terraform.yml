@@ -115,7 +115,7 @@ jobs:
         run: terraform validate
 
       - name: Terraform plan
-        if: github.event_name == 'pull_request'
+        # if: github.event_name == 'pull_request'
         env:
           TF_VAR_api_key: ${{ secrets.TF_VAR_API_KEY }}
           TF_VAR_username: ${{ secrets.TF_VAR_USERNAME }}
@@ -124,20 +124,20 @@ jobs:
           TF_VAR_franchise_id: ${{ secrets.TF_VAR_FRANCHISE_ID }}
         run: terraform plan -out=tfplan
 
-      - name: Upload Plane Artifact
+      - name: Upload Plan Artifact
         # if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: tfplan
-          path: tfplan
+          path: terraform
           retention-days: 1
 
-      - name: Download Plane Artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Download Plan Artifact
+        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/download-artifact@v4
         with:
           name: tfplan
 
       - name: Terraform apply
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: terraform apply -auto-approve -input=false tfplan
