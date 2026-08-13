@@ -129,7 +129,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dev-plan
-          path: dynasty-ff-backend/terraform/tfplan
+          path: tfplan
           # retention-days: 1
 
       - name: Download Plan Artifact
@@ -137,7 +137,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: dev-plan
-          path: dynasty-ff-backend/terraform
+          # path: dynasty-ff-backend/terraform
       - name: Terraform apply
         # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: terraform apply -auto-approve -input=false tfplan
