@@ -78,10 +78,12 @@ jobs:
       id-token: write
     defaults:
       run:
-        working-directory: dynasty-ff-backend/terraform
+        working-directory: terraform
     # environment:
     #   name: dev
     steps:
+      - name: show cwd
+        run: pwd
       - name: Checkout backend
         uses: actions/checkout@v7
         with:
@@ -131,15 +133,18 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dev-plan
-          path: dynasty-ff-backend/terraform/tfplan
+          path: terraform/tfplan
           retention-days: 1
+
+      - name: artifact show cwd
+        run: pwd
 
       - name: Download Plan Artifact
         # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/download-artifact@v4
         with:
           name: dev-plan
-          path: dynasty-ff-backend/terraform
+          path: terraform
       - name: Terraform apply
         # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: terraform apply -auto-approve -input=false tfplan
