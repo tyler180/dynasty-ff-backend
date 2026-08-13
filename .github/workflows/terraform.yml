@@ -151,7 +151,7 @@ jobs:
 
       - name: Terraform plan
         # if: github.event_name == 'pull_request'
-        run: terraform plan -out=tfplan
+        run: terraform plan -out=${{ runner.temp }}/tfplan
         working-directory: dynasty-ff-backend/terraform
 
       - name: Upload Plan Artifact
@@ -159,7 +159,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dev-plan
-          path: dynasty-ff-backend/terraform/tfplan
+          path: ${{ runner.temp }}/tfplan
           retention-days: 1
 
       - name: Download Plan Artifact
@@ -167,9 +167,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: dev-plan
-          path: dynasty-ff-backend/terraform
+          path: ${{ runner.temp }}/tfplan
+
+      - name: Show working directory after artifact download
+        run: pwd
+
+      - name: Show files after artifact download
+        run: ls -la
 
       - name: Terraform apply
         # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: terraform apply -auto-approve -input=false tfplan
+        run: terraform apply -auto-approve -input=false ${{ runner.temp }}/tfplan
         working-directory: dynasty-ff-backend/terraform
