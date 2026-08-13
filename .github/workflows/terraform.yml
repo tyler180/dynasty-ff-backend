@@ -76,18 +76,19 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    defaults:
-      run:
-        working-directory: terraform
+    # defaults:
+      # run:
+      #   working-directory: terraform
     # environment:
     #   name: dev
     steps:
-      - name: show cwd
+      - name: show pwd
         run: pwd
+
       - name: Checkout backend
         uses: actions/checkout@v7
-        with:
-          path: dynasty-ff-backend
+        # with:
+        #   path: dynasty-ff-backend
 
       - name: Checkout models
         uses: actions/checkout@v7
@@ -117,16 +118,20 @@ jobs:
 
       - name: Terraform fmt
         run: terraform fmt -check -recursive
+        working-directory: terraform
 
       - name: Terraform init
         run: terraform init
+        working-directory: terraform
 
       - name: Terraform validate
         run: terraform validate
+        working-directory: terraform
 
       - name: Terraform plan
         # if: github.event_name == 'pull_request'
         run: terraform plan -out=tfplan
+        working-directory: terraform
 
       - name: Upload Plan Artifact
         # if: github.event_name == 'pull_request'
@@ -136,15 +141,14 @@ jobs:
           path: terraform/tfplan
           retention-days: 1
 
-      - name: artifact show cwd
-        run: pwd
-
       - name: Download Plan Artifact
         # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/download-artifact@v4
         with:
           name: dev-plan
           path: terraform
+
       - name: Terraform apply
         # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: terraform apply -auto-approve -input=false tfplan
+        working-directory: terraform
