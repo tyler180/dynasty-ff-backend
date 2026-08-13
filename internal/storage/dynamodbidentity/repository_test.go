@@ -26,6 +26,18 @@ func (f *fakeDynamoClient) GetItem(_ context.Context, input *dynamodb.GetItemInp
 	return &dynamodb.GetItemOutput{Item: f.items[itemKey(input.Key)]}, nil
 }
 
+func (f *fakeDynamoClient) BatchGetItem(_ context.Context, input *dynamodb.BatchGetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.BatchGetItemOutput, error) {
+	responses := make(map[string][]map[string]types.AttributeValue)
+	for tableName, request := range input.RequestItems {
+		for _, key := range request.Keys {
+			if item := f.items[itemKey(key)]; item != nil {
+				responses[tableName] = append(responses[tableName], item)
+			}
+		}
+	}
+	return &dynamodb.BatchGetItemOutput{Responses: responses}, nil
+}
+
 func (f *fakeDynamoClient) PutItem(_ context.Context, input *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
 	f.puts = append(f.puts, input)
 	if f.putError != nil {
@@ -129,5 +141,32 @@ func TestMissingAliasReturnsPlayerNotFound(t *testing.T) {
 	_, err = repository.ResolvePlayer(context.Background(), player.ExternalID{Provider: player.ProviderMFL, Value: "missing"})
 	if !errors.Is(err, identity.ErrPlayerNotFound) {
 		t.Fatalf("error = %v, want ErrPlayerNotFound", err)
+	}
+}
+
+func TestResolvePlayersUsesBatchReads(t *testing.T) {
+	client := newFakeDynamoClient()
+	repository, err := New(client, "player-identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := player.Profile{ID: "player-123", DisplayName: "Josh Allen"}
+	if err := repository.PutPlayer(context.Background(), profile); err != nil {
+		t.Fatal(err)
+	}
+	externalID := player.ExternalID{Provider: player.ProviderMFL, Value: "13589"}
+	if err := repository.PutAlias(context.Background(), identity.Alias{
+		ExternalID: externalID, PlayerID: profile.ID, Source: "test", ResolutionMethod: "manual",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := repository.ResolvePlayers(context.Background(), []player.ExternalID{
+		externalID, {Provider: player.ProviderMFL, Value: "missing"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved[externalID].ID != profile.ID || len(resolved) != 1 {
+		t.Fatalf("resolved = %+v", resolved)
 	}
 }

@@ -9,7 +9,7 @@ locals {
   path_include = [
     "dynasty-ff-backend/**",
     "dynasty-ff-models/**",
-    "mfl-mcp/**",
+    "mfl/mfl-mcp/**",
   ]
   path_exclude = [
     "dynasty-ff-*/terraform/**",
@@ -17,11 +17,11 @@ locals {
     "dynasty-ff-*/.git/**",
     "dynasty-ff-*/.vscode/**",
     "dynasty-ff-*/.terraform/**",
-    "mfl-mcp/terraform/**",
-    "mfl-mcp/.gitignore",
-    "mfl-mcp/.git/**",
-    "mfl-mcp/.vscode/**",
-    "mfl-mcp/.terraform/**"
+    "mfl/mfl-mcp/terraform/**",
+    "mfl/mfl-mcp/.gitignore",
+    "mfl/mfl-mcp/.git/**",
+    "mfl/mfl-mcp/.vscode/**",
+    "mfl/mfl-mcp/.terraform/**"
   ]
   files_include = setunion([for f in local.path_include : fileset(local.source_path, f)]...)
   files_exclude = setunion([for f in local.path_exclude : fileset(local.source_path, f)]...)
@@ -46,6 +46,7 @@ module "ff_backend_lambda" {
     LEAGUE_DATA_BUCKET    = module.backend_bucket.s3_bucket_id
     MFL_MCP_COMMAND       = "/var/task/mfl-mcp"
     MFL_SECRET_ARN        = module.secrets_manager.secret_arn
+    IDENTITY_SOURCE_URL   = "https://raw.githubusercontent.com/DynastyProcess/data/master/files/db_playerids.csv"
   }
 
   timeout = 300

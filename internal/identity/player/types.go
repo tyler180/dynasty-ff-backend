@@ -23,6 +23,15 @@ const (
 	ProviderSleeper     Provider = "sleeper"
 	ProviderFantasyPros Provider = "fantasypros"
 	ProviderOverTheCap  Provider = "overthecap"
+	ProviderNFL         Provider = "nfl"
+	ProviderYahoo       Provider = "yahoo"
+	ProviderCBS         Provider = "cbs"
+	ProviderFleaflicker Provider = "fleaflicker"
+	ProviderRotowire    Provider = "rotowire"
+	ProviderKTC         Provider = "ktc"
+	ProviderFantasyData Provider = "fantasydata"
+	ProviderSportradar  Provider = "sportradar"
+	ProviderCFBRef      Provider = "cfbref"
 )
 
 // ExternalID associates a provider's identifier with a canonical player.

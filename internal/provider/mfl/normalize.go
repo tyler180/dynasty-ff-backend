@@ -46,6 +46,48 @@ func parseCatalog(payload map[string]any) map[string]catalogPlayer {
 	return result
 }
 
+// PlayerIDs returns all IDs in an MFL get_players response.
+func PlayerIDs(payload map[string]any) []string {
+	catalog := parseCatalog(payload)
+	ids := make([]string, 0, len(catalog))
+	for id := range catalog {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// LeaguePlayerIDs returns rostered and free-agent IDs relevant to a league.
+func LeaguePlayerIDs(rostersPayload, freeAgentsPayload map[string]any) []string {
+	ids := make(map[string]struct{})
+	rosters := envelope(rostersPayload, "rosters")
+	for _, franchiseValue := range values(rosters["franchise"]) {
+		franchise, ok := object(franchiseValue)
+		if !ok {
+			continue
+		}
+		for _, playerValue := range values(franchise["player"]) {
+			entry, ok := object(playerValue)
+			if ok {
+				if id := textField(entry, "id"); id != "" {
+					ids[id] = struct{}{}
+				}
+			}
+		}
+	}
+	walkObjects(envelope(freeAgentsPayload, "freeAgents"), func(item map[string]any) {
+		if id := textField(item, "id"); id != "" {
+			ids[id] = struct{}{}
+		}
+	})
+	result := make([]string, 0, len(ids))
+	for id := range ids {
+		result = append(result, id)
+	}
+	sort.Strings(result)
+	return result
+}
+
 func normalizeLeague(payload map[string]any, fallback source.League, franchiseID string) (source.League, string) {
 	league := fallback
 	root := envelope(payload, "league")
