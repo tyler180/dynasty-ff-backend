@@ -24,6 +24,10 @@ type Client interface {
 	PutItem(context.Context, *dynamodb.PutItemInput, ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
 }
 
+type BatchClient interface {
+	BatchGetItem(context.Context, *dynamodb.BatchGetItemInput, ...func(*dynamodb.Options)) (*dynamodb.BatchGetItemOutput, error)
+}
+
 type Repository struct {
 	client    Client
 	tableName string
@@ -86,6 +90,106 @@ func (r *Repository) ResolvePlayer(ctx context.Context, externalID player.Extern
 		return player.Profile{}, fmt.Errorf("decode alias %s#%s: %w", externalID.Provider, externalID.Value, err)
 	}
 	return r.GetPlayer(ctx, player.ID(playerID))
+}
+
+func (r *Repository) ResolvePlayers(ctx context.Context, externalIDs []player.ExternalID) (map[player.ExternalID]player.Profile, error) {
+	client, ok := r.client.(BatchClient)
+	if !ok {
+		return nil, fmt.Errorf("DynamoDB client does not support batch reads")
+	}
+	result := make(map[player.ExternalID]player.Profile)
+	if len(externalIDs) == 0 {
+		return result, nil
+	}
+
+	unique := make(map[player.ExternalID]struct{}, len(externalIDs))
+	for _, externalID := range externalIDs {
+		if err := externalID.Validate(); err != nil {
+			return nil, err
+		}
+		unique[externalID] = struct{}{}
+	}
+	aliases := make([]player.ExternalID, 0, len(unique))
+	for externalID := range unique {
+		aliases = append(aliases, externalID)
+	}
+
+	aliasToPlayer := make(map[player.ExternalID]player.ID)
+	for start := 0; start < len(aliases); start += 100 {
+		end := min(start+100, len(aliases))
+		keys := make([]map[string]types.AttributeValue, 0, end-start)
+		for _, externalID := range aliases[start:end] {
+			keys = append(keys, key(aliasPartitionKey(externalID), profileSortKey))
+		}
+		items, err := batchGet(ctx, client, r.tableName, keys)
+		if err != nil {
+			return nil, fmt.Errorf("batch resolve player aliases: %w", err)
+		}
+		for _, item := range items {
+			providerName := optionalString(item, "provider")
+			externalValue := optionalString(item, "external_id")
+			playerID := optionalString(item, "player_id")
+			if providerName != "" && externalValue != "" && playerID != "" {
+				aliasToPlayer[player.ExternalID{Provider: player.Provider(providerName), Value: externalValue}] = player.ID(playerID)
+			}
+		}
+	}
+
+	playerIDs := make(map[player.ID]struct{}, len(aliasToPlayer))
+	for _, playerID := range aliasToPlayer {
+		playerIDs[playerID] = struct{}{}
+	}
+	profiles := make(map[player.ID]player.Profile, len(playerIDs))
+	ids := make([]player.ID, 0, len(playerIDs))
+	for playerID := range playerIDs {
+		ids = append(ids, playerID)
+	}
+	for start := 0; start < len(ids); start += 100 {
+		end := min(start+100, len(ids))
+		keys := make([]map[string]types.AttributeValue, 0, end-start)
+		for _, playerID := range ids[start:end] {
+			keys = append(keys, key(playerPartitionKey(playerID), profileSortKey))
+		}
+		items, err := batchGet(ctx, client, r.tableName, keys)
+		if err != nil {
+			return nil, fmt.Errorf("batch get player profiles: %w", err)
+		}
+		for _, item := range items {
+			profile, err := decodeProfile(item)
+			if err != nil {
+				return nil, err
+			}
+			profiles[profile.ID] = profile
+		}
+	}
+	for externalID, playerID := range aliasToPlayer {
+		profile, ok := profiles[playerID]
+		if !ok {
+			return nil, fmt.Errorf("alias %s#%s references missing player %s", externalID.Provider, externalID.Value, playerID)
+		}
+		result[externalID] = profile
+	}
+	return result, nil
+}
+
+func batchGet(ctx context.Context, client BatchClient, tableName string, keys []map[string]types.AttributeValue) ([]map[string]types.AttributeValue, error) {
+	requestItems := map[string]types.KeysAndAttributes{tableName: {Keys: keys, ConsistentRead: aws.Bool(true)}}
+	var items []map[string]types.AttributeValue
+	for attempts := 0; len(requestItems) > 0; attempts++ {
+		if attempts == 8 {
+			return nil, fmt.Errorf("DynamoDB left batch keys unprocessed after retries")
+		}
+		output, err := client.BatchGetItem(ctx, &dynamodb.BatchGetItemInput{RequestItems: requestItems})
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, output.Responses[tableName]...)
+		requestItems = output.UnprocessedKeys
+		if len(requestItems) > 0 {
+			time.Sleep(time.Duration(1<<attempts) * 10 * time.Millisecond)
+		}
+	}
+	return items, nil
 }
 
 func (r *Repository) PutPlayer(ctx context.Context, profile player.Profile) error {

@@ -92,6 +92,32 @@ points to it. Example requests:
 }
 ```
 
+Normal operation uses `sync_identities`, not manual batches. It fetches the
+current league's rostered and free-agent MFL IDs through the bundled read-only
+MCP server, joins those IDs to the weekly DynastyProcess provider crosswalk,
+and idempotently writes canonical profiles and provider aliases:
+
+```json
+{
+  "action": "sync_identities",
+  "season": 2026,
+  "league_id": "79286"
+}
+```
+
+The importer uses batch-consistent reads to preserve existing identities and
+manual mappings. New canonical IDs are deterministic opaque UUIDs rather than
+MFL, GSIS, or other provider IDs. Conflicting cross-provider mappings stop the
+run for review; they are never silently replaced. The response reports source,
+MFL, eligible, unmatched, existing, created, profile-write, and alias-write
+counts. MFL IDs missing from both the crosswalk and DynamoDB are returned for
+manual review.
+
+The crosswalk is fetched at runtime from the public
+[DynastyProcess data repository](https://github.com/DynastyProcess/data), which
+is updated weekly and licensed GPL-3.0. Override `IDENTITY_SOURCE_URL` only for
+a controlled mirror or test fixture.
+
 ```json
 {
   "action": "put_alias",
@@ -106,7 +132,7 @@ points to it. Example requests:
 }
 ```
 
-After the relevant MFL aliases have been seeded, `sync_mfl` runs the bundled
+After `sync_identities` completes, `sync_mfl` runs the bundled
 read-only `mfl-mcp`, resolves every roster player through the identity table,
 and writes the normalized snapshot to S3:
 
@@ -120,9 +146,8 @@ and writes the normalized snapshot to S3:
 }
 ```
 
-Terraform creates an empty Secrets Manager secret and outputs its ARN. Populate
-the secret outside Terraform with exactly one credential shape so no credential
-value is written to Terraform state:
+The Lambda reads its MFL credential from the configured Secrets Manager secret.
+The supported minimal secret shape is:
 
 ```json
 {"api_key":"read-only-owner-api-key"}

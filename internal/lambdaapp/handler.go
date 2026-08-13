@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
 	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity"
@@ -24,6 +25,7 @@ const (
 	ActionGetPlayer      = "get_player"
 	ActionResolvePlayer  = "resolve_player"
 	ActionPutIdentities  = "put_identities"
+	ActionSyncIdentities = "sync_identities"
 	ActionSyncMFL        = "sync_mfl"
 )
 
@@ -44,31 +46,43 @@ type Request struct {
 	LiveDraft        bool               `json:"live_draft,omitempty"`
 	TimeoutSeconds   int                `json:"timeout_seconds,omitempty"`
 	LeagueConfigPath string             `json:"league_config_path,omitempty"`
+	Workers          int                `json:"workers,omitempty"`
 }
 
 type Response struct {
-	Action        string           `json:"action"`
-	Status        string           `json:"status"`
-	Snapshot      *league.Snapshot `json:"snapshot,omitempty"`
-	Player        *player.Profile  `json:"player,omitempty"`
-	Warnings      []string         `json:"warnings,omitempty"`
-	SyncedAt      *time.Time       `json:"synced_at,omitempty"`
-	StoredPlayers int              `json:"stored_players,omitempty"`
-	StoredAliases int              `json:"stored_aliases,omitempty"`
+	Action        string               `json:"action"`
+	Status        string               `json:"status"`
+	Snapshot      *league.Snapshot     `json:"snapshot,omitempty"`
+	Player        *player.Profile      `json:"player,omitempty"`
+	Warnings      []string             `json:"warnings,omitempty"`
+	SyncedAt      *time.Time           `json:"synced_at,omitempty"`
+	StoredPlayers int                  `json:"stored_players,omitempty"`
+	StoredAliases int                  `json:"stored_aliases,omitempty"`
+	IdentitySync  *identitysync.Result `json:"identity_sync,omitempty"`
 }
 
 type Syncer interface {
 	Sync(context.Context, mflingest.Request) (mflingest.Result, error)
 }
 
+type IdentitySyncer interface {
+	Sync(context.Context, identitysync.Request) (identitysync.Result, error)
+}
+
 type Handler struct {
-	snapshots  leaguestore.Repository
-	identities identity.Repository
-	syncer     Syncer
+	snapshots      leaguestore.Repository
+	identities     identity.Repository
+	syncer         Syncer
+	identitySyncer IdentitySyncer
 }
 
 func (h *Handler) WithSyncer(syncer Syncer) *Handler {
 	h.syncer = syncer
+	return h
+}
+
+func (h *Handler) WithIdentitySyncer(syncer IdentitySyncer) *Handler {
+	h.identitySyncer = syncer
 	return h
 }
 
@@ -160,6 +174,19 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 			Action: action, Status: "stored",
 			StoredPlayers: len(request.Players), StoredAliases: len(request.Aliases),
 		}, nil
+	case ActionSyncIdentities:
+		if h.identitySyncer == nil {
+			return Response{}, fmt.Errorf("identity sync is not configured")
+		}
+		year := request.Season
+		if year == 0 {
+			year = time.Now().UTC().Year()
+		}
+		result, err := h.identitySyncer.Sync(ctx, identitysync.Request{Year: year, LeagueID: string(request.LeagueID), Workers: request.Workers})
+		if err != nil {
+			return Response{}, err
+		}
+		return Response{Action: action, Status: "stored", IdentitySync: &result}, nil
 	case ActionSyncMFL:
 		if h.syncer == nil {
 			return Response{}, fmt.Errorf("MFL sync is not configured")

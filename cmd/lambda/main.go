@@ -9,9 +9,12 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
 	"github.com/tyler180/dynasty-ff-backend/internal/lambdaapp"
+	"github.com/tyler180/dynasty-ff-backend/internal/provider/dynastyprocess"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/mflcredentials"
+	"github.com/tyler180/dynasty-ff-backend/internal/provider/mflidentity"
 	"github.com/tyler180/dynasty-ff-backend/internal/storage/dynamodbidentity"
 	"github.com/tyler180/dynasty-ff-backend/internal/storage/s3leaguestore"
 )
@@ -61,6 +64,18 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	identitySourceURL := strings.TrimSpace(os.Getenv("IDENTITY_SOURCE_URL"))
+	if identitySourceURL == "" {
+		identitySourceURL = dynastyprocess.DefaultURL
+	}
+	identitySource, err := dynastyprocess.NewDefault(identitySourceURL)
+	if err != nil {
+		return nil, err
+	}
+	handler.WithIdentitySyncer(identitysync.Service{
+		Source: identitySource, Repository: identities, BulkResolver: identities,
+		RelevantPlayers: mflidentity.Source{MCPCommand: mcpCommand, Credentials: credentials},
+	})
 	return handler.WithSyncer(mflingest.Service{
 		MCPCommand: mcpCommand, Credentials: credentials,
 		Identities: identities, Snapshots: snapshots,

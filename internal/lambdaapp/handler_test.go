@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
 	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity"
@@ -27,6 +28,12 @@ func (f *fakeSnapshots) SnapshotAt(context.Context, league.ID, league.FranchiseI
 type fakeIdentities struct{ profile player.Profile }
 
 type fakeSyncer struct{ result mflingest.Result }
+
+type fakeIdentitySyncer struct{ result identitysync.Result }
+
+func (f fakeIdentitySyncer) Sync(context.Context, identitysync.Request) (identitysync.Result, error) {
+	return f.result, nil
+}
 
 func (f fakeSyncer) Sync(context.Context, mflingest.Request) (mflingest.Result, error) {
 	return f.result, nil
@@ -127,5 +134,23 @@ func TestHandlerBootstrapsIdentityBatch(t *testing.T) {
 	}
 	if response.StoredPlayers != 1 || response.StoredAliases != 1 {
 		t.Fatalf("stored players/aliases = %d/%d, want 1/1", response.StoredPlayers, response.StoredAliases)
+	}
+}
+
+func TestHandlerSyncsIdentities(t *testing.T) {
+	handler, err := New(&fakeSnapshots{}, &fakeIdentities{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := identitysync.Result{EligiblePlayers: 42, CreatedPlayers: 40, ExistingPlayers: 2}
+	handler.WithIdentitySyncer(fakeIdentitySyncer{result: want})
+	response, err := handler.Handle(context.Background(), Request{
+		Action: ActionSyncIdentities, Season: 2026, LeagueID: "79286",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.IdentitySync == nil || response.IdentitySync.EligiblePlayers != want.EligiblePlayers {
+		t.Fatalf("identity sync response = %+v", response.IdentitySync)
 	}
 }

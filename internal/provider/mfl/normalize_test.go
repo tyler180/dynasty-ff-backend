@@ -84,3 +84,17 @@ func TestParseLiveDraftTracksOnClockAndSelectedPlayers(t *testing.T) {
 		t.Fatalf("completed picks = %v", info.CompletedPicks)
 	}
 }
+
+func TestLeaguePlayerIDsCombinesRostersAndFreeAgents(t *testing.T) {
+	rosters := map[string]any{"rosters": map[string]any{"franchise": []any{
+		map[string]any{"id": "0001", "player": []any{map[string]any{"id": "13589"}}},
+		map[string]any{"id": "0002", "player": map[string]any{"id": "15281"}},
+	}}}
+	freeAgents := map[string]any{"freeAgents": map[string]any{"leagueUnit": map[string]any{"player": []any{
+		map[string]any{"id": "17000"}, map[string]any{"id": "13589"},
+	}}}}
+	want := []string{"13589", "15281", "17000"}
+	if got := LeaguePlayerIDs(rosters, freeAgents); !reflect.DeepEqual(got, want) {
+		t.Fatalf("player IDs = %v, want %v", got, want)
+	}
+}

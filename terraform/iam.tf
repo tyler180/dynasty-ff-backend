@@ -2,6 +2,7 @@ data "aws_iam_policy_document" "lambda_policy_doc" {
   statement {
     actions = [
       "dynamodb:GetItem",
+      "dynamodb:BatchGetItem",
       "dynamodb:PutItem",
     ]
     resources = [module.dynamodb_table.dynamodb_table_arn]

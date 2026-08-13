@@ -100,7 +100,7 @@ jobs:
         with:
           repository: tyler180/mfl-mcp
           token: ${{ secrets.GH_PRIVATE_REPOS_TOKEN }}
-          path: mfl-mcp
+          path: mfl/mfl-mcp
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
