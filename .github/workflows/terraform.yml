@@ -65,6 +65,12 @@ jobs:
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
+    env:
+      TF_VAR_api_key: ${{ secrets.TF_VAR_API_KEY }}
+      TF_VAR_username: ${{ secrets.TF_VAR_USERNAME }}
+      TF_VAR_password: ${{ secrets.TF_VAR_PASSWORD }}
+      TF_VAR_league_id: ${{ secrets.TF_VAR_LEAGUE_ID }}
+      TF_VAR_franchise_id: ${{ secrets.TF_VAR_FRANCHISE_ID }}
     needs:
       - go
     permissions:
@@ -73,6 +79,8 @@ jobs:
     defaults:
       run:
         working-directory: dynasty-ff-backend/terraform
+    # environment:
+    #   name: dev
     steps:
       - name: Checkout backend
         uses: actions/checkout@v7
@@ -116,12 +124,6 @@ jobs:
 
       - name: Terraform plan
         # if: github.event_name == 'pull_request'
-        env:
-          TF_VAR_api_key: ${{ secrets.TF_VAR_API_KEY }}
-          TF_VAR_username: ${{ secrets.TF_VAR_USERNAME }}
-          TF_VAR_password: ${{ secrets.TF_VAR_PASSWORD }}
-          TF_VAR_league_id: ${{ secrets.TF_VAR_LEAGUE_ID }}
-          TF_VAR_franchise_id: ${{ secrets.TF_VAR_FRANCHISE_ID }}
         run: terraform plan -out=tfplan
 
       - name: Upload Plan Artifact
@@ -129,7 +131,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dev-plan
-          path: dynasty-ff-backend/terraform/tfplan
+          path: tfplan
           # retention-days: 1
 
       - name: Download Plan Artifact
@@ -137,7 +139,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: dev-plan
-          path: dynasty-ff-backend/terraform
+          # path: terraform
       - name: Terraform apply
         # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: terraform apply -auto-approve -input=false tfplan
