@@ -15,6 +15,14 @@ module "ff_backend_lambda" {
   image_uri    = module.ff_backend_build.image_uri
   package_type = "Image"
 
+  environment_variables = {
+    PLAYER_IDENTITY_TABLE = "player-id"
+    LEAGUE_DATA_BUCKET    = local.name
+  }
+
+  attach_cloudwatch_logs_policy = true
+  policy_json                   = data.aws_iam_policy_document.lambda_policy_doc.json
+
   tags = data.context_tags.backend.tags
 }
 
