@@ -73,7 +73,6 @@ jobs:
     defaults:
       run:
         working-directory: dynasty-ff-backend/terraform
-    environment: dev
     steps:
       - name: Checkout backend
         uses: actions/checkout@v7
