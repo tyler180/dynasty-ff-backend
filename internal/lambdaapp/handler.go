@@ -186,7 +186,11 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 		if err != nil {
 			return Response{}, err
 		}
-		return Response{Action: action, Status: "stored", IdentitySync: &result}, nil
+		status := "stored"
+		if !result.Complete {
+			status = "partial"
+		}
+		return Response{Action: action, Status: status, IdentitySync: &result}, nil
 	case ActionSyncMFL:
 		if h.syncer == nil {
 			return Response{}, fmt.Errorf("MFL sync is not configured")

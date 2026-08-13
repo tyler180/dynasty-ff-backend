@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tyler180/dynasty-ff-backend/internal/identity"
@@ -30,17 +31,29 @@ type Request struct {
 }
 
 type Result struct {
-	SourcePlayers         int      `json:"source_players"`
-	MFLPlayers            int      `json:"mfl_players"`
-	EligiblePlayers       int      `json:"eligible_players"`
-	UnmatchedMFLPlayers   int      `json:"unmatched_mfl_players"`
-	UnmatchedMFLPlayerIDs []string `json:"unmatched_mfl_player_ids,omitempty"`
-	ExistingPlayers       int      `json:"existing_players"`
-	CreatedPlayers        int      `json:"created_players"`
-	WrittenProfiles       int      `json:"written_profiles"`
-	WrittenAliases        int      `json:"written_aliases"`
-	ExistingAliases       int      `json:"existing_aliases"`
+	Complete              bool             `json:"complete"`
+	PartialReason         string           `json:"partial_reason,omitempty"`
+	SourcePlayers         int              `json:"source_players"`
+	MFLPlayers            int              `json:"mfl_players"`
+	EligiblePlayers       int              `json:"eligible_players"`
+	UnmatchedMFLPlayers   int              `json:"unmatched_mfl_players"`
+	UnmatchedMFLPlayerIDs []string         `json:"unmatched_mfl_player_ids,omitempty"`
+	ExistingPlayers       int              `json:"existing_players"`
+	CreatedPlayers        int              `json:"created_players"`
+	WrittenProfiles       int              `json:"written_profiles"`
+	WrittenAliases        int              `json:"written_aliases"`
+	ExistingAliases       int              `json:"existing_aliases"`
+	AmbiguousAliases      []AmbiguousAlias `json:"ambiguous_aliases,omitempty"`
 }
+
+type AmbiguousAlias struct {
+	Provider     player.Provider `json:"provider"`
+	ExternalID   string          `json:"external_id"`
+	MFLPlayerIDs []string        `json:"mfl_player_ids"`
+	PlayerNames  []string        `json:"player_names"`
+}
+
+const deadlineReserve = 20 * time.Second
 
 type Service struct {
 	Source          Source
@@ -73,16 +86,12 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	result := Result{SourcePlayers: len(sourcePlayers)}
+	result := Result{Complete: true, SourcePlayers: len(sourcePlayers)}
 	relevantMFLIDs, err := s.RelevantPlayers.PlayerIDs(ctx, request.Year, request.LeagueID)
 	if err != nil {
 		return Result{}, err
 	}
 	var records []dynastyprocess.Player
-	allExternalIDs := make([]player.ExternalID, 0, len(relevantMFLIDs))
-	for mflID := range relevantMFLIDs {
-		allExternalIDs = append(allExternalIDs, player.ExternalID{Provider: player.ProviderMFL, Value: mflID})
-	}
 	matchedMFLIDs := make(map[string]struct{}, len(relevantMFLIDs))
 	for _, record := range sourcePlayers {
 		if _, relevant := relevantMFLIDs[record.MFLID]; !relevant || record.MFLID == "" || strings.TrimSpace(record.Name) == "" {
@@ -90,10 +99,22 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 		}
 		records = append(records, record)
 		matchedMFLIDs[record.MFLID] = struct{}{}
-		allExternalIDs = append(allExternalIDs, aliases(record)...)
 	}
 	result.MFLPlayers = len(relevantMFLIDs)
 	result.EligiblePlayers = len(records)
+	ambiguous := ambiguousAliases(records)
+	result.AmbiguousAliases = describeAmbiguousAliases(ambiguous)
+	allExternalIDs := make([]player.ExternalID, 0, len(relevantMFLIDs))
+	for mflID := range relevantMFLIDs {
+		allExternalIDs = append(allExternalIDs, player.ExternalID{Provider: player.ProviderMFL, Value: mflID})
+	}
+	for _, record := range records {
+		for _, externalID := range aliases(record) {
+			if _, skip := ambiguous[externalID]; !skip {
+				allExternalIDs = append(allExternalIDs, externalID)
+			}
+		}
+	}
 	existing, err := s.BulkResolver.ResolvePlayers(ctx, allExternalIDs)
 	if err != nil {
 		return Result{}, err
@@ -118,7 +139,7 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	candidates := make([]candidate, 0, len(records))
 	seenCanonical := make(map[player.ID]struct{})
 	for _, record := range records {
-		externalIDs := aliases(record)
+		externalIDs := unambiguousAliases(record, ambiguous)
 		var existingProfile *player.Profile
 		for _, externalID := range externalIDs {
 			profile, ok := existing[externalID]
@@ -151,10 +172,16 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 		profile := item.profile
 		profileTasks = append(profileTasks, func(ctx context.Context) error { return s.Repository.PutPlayer(ctx, profile) })
 	}
-	if err := run(ctx, request.Workers, profileTasks); err != nil {
+	completed, stopped, err := run(ctx, request.Workers, deadlineReserve, profileTasks)
+	result.WrittenProfiles = completed
+	if err != nil {
 		return Result{}, err
 	}
-	result.WrittenProfiles = len(profileTasks)
+	if stopped {
+		result.Complete = false
+		result.PartialReason = "stopped before the Lambda deadline while writing player profiles; invoke sync_identities again to continue"
+		return result, nil
+	}
 
 	var aliasTasks []func(context.Context) error
 	for _, item := range candidates {
@@ -173,11 +200,76 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 			aliasTasks = append(aliasTasks, func(ctx context.Context) error { return s.Repository.PutAlias(ctx, alias) })
 		}
 	}
-	if err := run(ctx, request.Workers, aliasTasks); err != nil {
+	completed, stopped, err = run(ctx, request.Workers, deadlineReserve, aliasTasks)
+	result.WrittenAliases = completed
+	if err != nil {
 		return Result{}, err
 	}
-	result.WrittenAliases = len(aliasTasks)
+	if stopped {
+		result.Complete = false
+		result.PartialReason = "stopped before the Lambda deadline while writing player aliases; invoke sync_identities again to continue"
+	}
 	return result, nil
+}
+
+type aliasOccurrence struct {
+	mflID string
+	name  string
+}
+
+func ambiguousAliases(records []dynastyprocess.Player) map[player.ExternalID][]aliasOccurrence {
+	occurrences := make(map[player.ExternalID][]aliasOccurrence)
+	for _, record := range records {
+		for _, externalID := range aliases(record) {
+			occurrences[externalID] = append(occurrences[externalID], aliasOccurrence{mflID: record.MFLID, name: record.Name})
+		}
+	}
+	ambiguous := make(map[player.ExternalID][]aliasOccurrence)
+	for externalID, items := range occurrences {
+		uniqueMFLIDs := make(map[string]struct{})
+		for _, item := range items {
+			uniqueMFLIDs[item.mflID] = struct{}{}
+		}
+		if len(uniqueMFLIDs) > 1 {
+			ambiguous[externalID] = items
+		}
+	}
+	return ambiguous
+}
+
+func describeAmbiguousAliases(ambiguous map[player.ExternalID][]aliasOccurrence) []AmbiguousAlias {
+	result := make([]AmbiguousAlias, 0, len(ambiguous))
+	for externalID, occurrences := range ambiguous {
+		item := AmbiguousAlias{Provider: externalID.Provider, ExternalID: externalID.Value}
+		seen := make(map[string]struct{})
+		for _, occurrence := range occurrences {
+			key := occurrence.mflID + "\x00" + occurrence.name
+			if _, duplicate := seen[key]; duplicate {
+				continue
+			}
+			seen[key] = struct{}{}
+			item.MFLPlayerIDs = append(item.MFLPlayerIDs, occurrence.mflID)
+			item.PlayerNames = append(item.PlayerNames, occurrence.name)
+		}
+		result = append(result, item)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Provider == result[j].Provider {
+			return result[i].ExternalID < result[j].ExternalID
+		}
+		return result[i].Provider < result[j].Provider
+	})
+	return result
+}
+
+func unambiguousAliases(record dynastyprocess.Player, ambiguous map[player.ExternalID][]aliasOccurrence) []player.ExternalID {
+	result := make([]player.ExternalID, 0)
+	for _, externalID := range aliases(record) {
+		if _, skip := ambiguous[externalID]; !skip {
+			result = append(result, externalID)
+		}
+	}
+	return result
 }
 
 func aliases(record dynastyprocess.Player) []player.ExternalID {
@@ -242,13 +334,14 @@ func canonicalID(record dynastyprocess.Player) player.ID {
 	return player.ID(fmt.Sprintf("player-%x-%x-%x-%x-%x", digest[0:4], digest[4:6], digest[6:8], digest[8:10], digest[10:16]))
 }
 
-func run(ctx context.Context, workers int, tasks []func(context.Context) error) error {
+func run(ctx context.Context, workers int, reserve time.Duration, tasks []func(context.Context) error) (int, bool, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	jobs := make(chan func(context.Context) error)
 	var group sync.WaitGroup
 	var firstErr error
 	var once sync.Once
+	var completed atomic.Int64
 	for range workers {
 		group.Add(1)
 		go func() {
@@ -256,23 +349,30 @@ func run(ctx context.Context, workers int, tasks []func(context.Context) error) 
 			for task := range jobs {
 				if err := task(ctx); err != nil {
 					once.Do(func() { firstErr = err; cancel() })
+				} else {
+					completed.Add(1)
 				}
 			}
 		}()
 	}
 	for _, task := range tasks {
+		if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= reserve {
+			close(jobs)
+			group.Wait()
+			return int(completed.Load()), true, firstErr
+		}
 		select {
 		case jobs <- task:
 		case <-ctx.Done():
 			close(jobs)
 			group.Wait()
 			if firstErr != nil {
-				return firstErr
+				return int(completed.Load()), false, firstErr
 			}
-			return ctx.Err()
+			return int(completed.Load()), false, ctx.Err()
 		}
 	}
 	close(jobs)
 	group.Wait()
-	return firstErr
+	return int(completed.Load()), false, firstErr
 }

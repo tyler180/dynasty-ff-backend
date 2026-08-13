@@ -142,7 +142,7 @@ func TestHandlerSyncsIdentities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := identitysync.Result{EligiblePlayers: 42, CreatedPlayers: 40, ExistingPlayers: 2}
+	want := identitysync.Result{Complete: true, EligiblePlayers: 42, CreatedPlayers: 40, ExistingPlayers: 2}
 	handler.WithIdentitySyncer(fakeIdentitySyncer{result: want})
 	response, err := handler.Handle(context.Background(), Request{
 		Action: ActionSyncIdentities, Season: 2026, LeagueID: "79286",
@@ -150,7 +150,26 @@ func TestHandlerSyncsIdentities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.IdentitySync == nil || response.IdentitySync.EligiblePlayers != want.EligiblePlayers {
+	if response.Status != "stored" || response.IdentitySync == nil || response.IdentitySync.EligiblePlayers != want.EligiblePlayers {
 		t.Fatalf("identity sync response = %+v", response.IdentitySync)
+	}
+}
+
+func TestHandlerReportsPartialIdentitySync(t *testing.T) {
+	handler, err := New(&fakeSnapshots{}, &fakeIdentities{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler.WithIdentitySyncer(fakeIdentitySyncer{result: identitysync.Result{
+		Complete: false, PartialReason: "stopped before deadline", WrittenProfiles: 12,
+	}})
+	response, err := handler.Handle(context.Background(), Request{
+		Action: ActionSyncIdentities, Season: 2026, LeagueID: "79286",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Status != "partial" || response.IdentitySync == nil || response.IdentitySync.Complete {
+		t.Fatalf("response = %+v", response)
 	}
 }

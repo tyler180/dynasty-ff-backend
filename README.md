@@ -107,11 +107,20 @@ and idempotently writes canonical profiles and provider aliases:
 
 The importer uses batch-consistent reads to preserve existing identities and
 manual mappings. New canonical IDs are deterministic opaque UUIDs rather than
-MFL, GSIS, or other provider IDs. Conflicting cross-provider mappings stop the
-run for review; they are never silently replaced. The response reports source,
-MFL, eligible, unmatched, existing, created, profile-write, and alias-write
-counts. MFL IDs missing from both the crosswalk and DynamoDB are returned for
-manual review.
+MFL, GSIS, or other provider IDs. When the source assigns one provider alias to
+multiple MFL players, that alias is omitted and listed in `ambiguous_aliases`;
+the remaining identities continue importing. Conflicts with an existing,
+unambiguous mapping still stop the run for review and are never silently
+replaced. The response reports source, MFL, eligible, unmatched, existing,
+created, profile-write, and alias-write counts. MFL IDs missing from both the
+crosswalk and DynamoDB are returned for manual review.
+
+The Lambda timeout is 15 minutes. The importer reserves 20 seconds before its
+deadline, stops scheduling new DynamoDB writes, and returns `status: "partial"`
+with `identity_sync.complete: false` if more work remains. Invoke the identical
+`sync_identities` request again to continue. Existing aliases are skipped and
+new canonical IDs are deterministic, so retries are safe. A normal completed
+response has `status: "stored"` and `identity_sync.complete: true`.
 
 The crosswalk is fetched at runtime from the public
 [DynastyProcess data repository](https://github.com/DynastyProcess/data), which
