@@ -122,6 +122,12 @@ jobs:
       - name: Terraform plan
         if: github.event_name == 'pull_request'
         run: terraform plan -input=false
+        env:
+          TF_VAR_api_key: ${{ secrets.TF_VAR_API_KEY }}
+          TF_VAR_username: ${{ secrets.TF_VAR_USERNAME }}
+          TF_VAR_password: ${{ secrets.TF_VAR_PASSWORD }}
+          TF_VAR_league_id: ${{ secrets.TF_VAR_LEAGUE_ID }}
+          TF_VAR_franchise_id: ${{ secrets.TF_VAR_FRANCHISE_ID }}
 
       - name: Terraform apply
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
