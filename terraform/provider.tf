@@ -72,6 +72,7 @@ provider "context" {
   values = {
     environment = "dev"
     name        = basename(dirname(path.cwd))
+    # name = abspath("${path.module}/..")
   }
 }
 

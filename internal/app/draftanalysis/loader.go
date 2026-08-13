@@ -43,12 +43,12 @@ type RefreshSummary struct {
 	SyncedAt      time.Time
 }
 
-type managedCaller interface {
+type ManagedCaller interface {
 	mflsync.Caller
 	Close() error
 }
 
-type ConnectFunc func(context.Context, string, ...string) (managedCaller, error)
+type ConnectFunc func(context.Context, string, ...string) (ManagedCaller, error)
 
 type Loader struct {
 	Connect ConnectFunc
@@ -57,7 +57,7 @@ type Loader struct {
 
 func NewLoader() Loader {
 	return Loader{
-		Connect: func(ctx context.Context, command string, arguments ...string) (managedCaller, error) {
+		Connect: func(ctx context.Context, command string, arguments ...string) (ManagedCaller, error) {
 			return mflsync.ConnectCommand(ctx, command, arguments...)
 		},
 		Now: time.Now,

@@ -91,6 +91,13 @@ jobs:
           token: ${{ secrets.GH_PRIVATE_REPOS_TOKEN }}
           path: dynasty-ff-models
 
+      - name: Checkout read-only MFL MCP server
+        uses: actions/checkout@v7
+        with:
+          repository: tylermclean/mfl-mcp
+          token: ${{ secrets.GH_PRIVATE_REPOS_TOKEN }}
+          path: mfl/mfl-mcp
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:

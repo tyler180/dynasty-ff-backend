@@ -3,51 +3,29 @@ data "aws_iam_policy_document" "lambda_policy_doc" {
     actions = [
       "dynamodb:GetItem",
       "dynamodb:PutItem",
-      "dynamodb:UpdateItem",
-      "dynamodb:DeleteItem",
-      "dynamodb:Query",
-      "dynamodb:Scan",
-      "s3:*",
     ]
-    resources = [
-      module.dynamodb_table.dynamodb_table_arn,
-      "arn:aws:s3:::${local.name}",
-    ]
+    resources = [module.dynamodb_table.dynamodb_table_arn]
   }
-}
 
-data "aws_iam_policy_document" "bucket_policy" {
   statement {
-    principals {
-      type        = "AWS"
-      identifiers = [aws_iam_role.this.arn]
-    }
-
     actions = [
-      "s3:*",
+      "s3:ListBucket",
     ]
+    resources = [module.backend_bucket.s3_bucket_arn]
+  }
 
+  statement {
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+    ]
     resources = [
-      "arn:aws:s3:::${local.name}",
-      module.ff_backend_lambda.lambda_function_arn
+      "${module.backend_bucket.s3_bucket_arn}/snapshots/*",
     ]
   }
-}
 
-resource "aws_iam_role" "this" {
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Action": "sts:AssumeRole",
-      "Principal": {
-        "Service": "lambda.amazonaws.com"
-      },
-      "Effect": "Allow",
-      "Sid": ""
-    }
-  ]
-}
-EOF
+  statement {
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [module.secrets_manager.secret_arn]
+  }
 }

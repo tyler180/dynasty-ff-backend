@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -22,10 +23,25 @@ type CommandClient struct {
 }
 
 func ConnectCommand(ctx context.Context, command string, arguments ...string) (*CommandClient, error) {
+	return ConnectCommandWithEnvironment(ctx, command, nil, arguments...)
+}
+
+func ConnectCommandWithEnvironment(ctx context.Context, command string, environment map[string]string, arguments ...string) (*CommandClient, error) {
 	if command == "" {
 		return nil, errors.New("MCP command is required")
 	}
 	process := exec.Command(command, arguments...)
+	if len(environment) > 0 {
+		keys := make([]string, 0, len(environment))
+		for key := range environment {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		process.Env = os.Environ()
+		for _, key := range keys {
+			process.Env = append(process.Env, key+"="+environment[key])
+		}
+	}
 	process.Stderr = os.Stderr
 	client := mcp.NewClient(&mcp.Implementation{Name: "dynasty-sync", Version: "0.1.0"}, nil)
 	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: process}, nil)

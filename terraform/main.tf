@@ -4,6 +4,27 @@ data "aws_caller_identity" "this" {}
 
 data "aws_ecr_authorization_token" "token" {}
 
+locals {
+  source_path = abspath("${path.module}/../..")
+  path_include = [
+    "dynasty-ff-backend/**",
+    "dynasty-ff-models/**",
+    "mfl/mfl-mcp/**",
+  ]
+  path_exclude = [
+    "dynasty-ff-*/terraform/**",
+    "dynasty-ff-*/.gitignore",
+    "dynasty-ff-*/.git/**",
+    "dynasty-ff-*/.vscode/**",
+    "dynasty-ff-*/.terraform/**"
+  ]
+  files_include = setunion([for f in local.path_include : fileset(local.source_path, f)]...)
+  files_exclude = setunion([for f in local.path_exclude : fileset(local.source_path, f)]...)
+  files         = sort(setsubtract(local.files_include, local.files_exclude))
+
+  dir_sha = sha1(join("", [for f in local.files : filesha1("${local.source_path}/${f}")]))
+}
+
 module "ff_backend_lambda" {
   source  = "terraform-aws-modules/lambda/aws"
   version = "8.8.0"
@@ -16,11 +37,16 @@ module "ff_backend_lambda" {
   package_type = "Image"
 
   environment_variables = {
-    PLAYER_IDENTITY_TABLE = "player-id"
-    LEAGUE_DATA_BUCKET    = local.name
+    PLAYER_IDENTITY_TABLE = module.dynamodb_table.dynamodb_table_id
+    LEAGUE_DATA_BUCKET    = module.backend_bucket.s3_bucket_id
+    MFL_MCP_COMMAND       = "/var/task/mfl-mcp"
+    MFL_SECRET_ARN        = module.secrets_manager.secret_arn
   }
 
+  timeout = 300
+
   attach_cloudwatch_logs_policy = true
+  attach_policy_json            = true
   policy_json                   = data.aws_iam_policy_document.lambda_policy_doc.json
 
   tags = data.context_tags.backend.tags
