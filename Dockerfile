@@ -6,7 +6,7 @@ COPY dynasty-ff-models /src/dynasty-ff-models
 RUN go mod edit -replace github.com/tyler180/dynasty-ff-models=/src/dynasty-ff-models \
     && go mod download
 
-COPY mfl/mfl-mcp/go.mod mfl/mfl-mcp/go.sum /src/mfl-mcp/
+COPY mfl-mcp/go.mod mfl-mcp/go.sum /src/mfl-mcp/
 RUN cd /src/mfl-mcp && go mod download
 
 # Copy source
@@ -15,8 +15,8 @@ COPY dynasty-ff-backend/config ./config
 COPY dynasty-ff-backend/data ./data
 COPY dynasty-ff-backend/docs ./docs
 COPY dynasty-ff-backend/internal ./internal
-COPY mfl/mfl-mcp/cmd /src/mfl-mcp/cmd
-COPY mfl/mfl-mcp/internal /src/mfl-mcp/internal
+COPY mfl-mcp/cmd /src/mfl-mcp/cmd
+COPY mfl-mcp/internal /src/mfl-mcp/internal
 
 # Build the Lambda custom runtime bootstrap with minimal symbol info.
 ENV CGO_ENABLED=0

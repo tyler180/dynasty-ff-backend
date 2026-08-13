@@ -9,14 +9,19 @@ locals {
   path_include = [
     "dynasty-ff-backend/**",
     "dynasty-ff-models/**",
-    "mfl/mfl-mcp/**",
+    "mfl-mcp/**",
   ]
   path_exclude = [
     "dynasty-ff-*/terraform/**",
     "dynasty-ff-*/.gitignore",
     "dynasty-ff-*/.git/**",
     "dynasty-ff-*/.vscode/**",
-    "dynasty-ff-*/.terraform/**"
+    "dynasty-ff-*/.terraform/**",
+    "mfl-mcp/terraform/**",
+    "mfl-mcp/.gitignore",
+    "mfl-mcp/.git/**",
+    "mfl-mcp/.vscode/**",
+    "mfl-mcp/.terraform/**"
   ]
   files_include = setunion([for f in local.path_include : fileset(local.source_path, f)]...)
   files_exclude = setunion([for f in local.path_exclude : fileset(local.source_path, f)]...)
