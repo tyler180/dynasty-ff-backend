@@ -5,7 +5,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/tyler180/dynasty-ff-backend/internal/analysis/source"
+	source "github.com/tyler180/dynasty-ff-models/analysis"
 )
 
 func Validate(snapshot source.Snapshot) error {

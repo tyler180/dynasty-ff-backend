@@ -2,9 +2,9 @@
 
 The application and data-integration layer for dynasty-football analysis. This
 repository owns provider ingestion, canonical player identity, persistence,
-league snapshots, roster analysis, and deployment infrastructure. The
-deterministic optimizer remains in `dynasty-ff-models` and is consumed
-through its public `draft` package.
+league snapshots, model-input assembly, and deployment infrastructure. Pure
+analysis remains in `dynasty-ff-models` and is consumed through its public
+`analysis` and `draft` packages.
 
 ## Repository boundary
 
@@ -12,7 +12,7 @@ through its public `draft` package.
 - `cmd/ingest-mfl`: read-only MFL snapshot ingestion
 - `cmd/lambda`: AWS Lambda persistence handler
 - `internal/provider/mfl`: MFL MCP adapter and normalization
-- `internal/analysis/source`: roster, cap, taxi, and cut analysis
+- `internal/app/snapshotanalysis`: stored-fact adapter for the public analysis API
 - `internal/identity`: canonical player identity contracts
 - `internal/storage`: persistence adapters
 - `internal/draftadapter`: conversion into the model's public input API
@@ -20,8 +20,8 @@ through its public `draft` package.
 
 ## Local development
 
-Go 1.26 or newer is expected. The local `replace` directive points at the
-sibling model checkout.
+Go 1.26 or newer is expected. For simultaneous local changes across both
+repositories, use a temporary Go workspace containing the sibling checkouts.
 
 ```sh
 make test

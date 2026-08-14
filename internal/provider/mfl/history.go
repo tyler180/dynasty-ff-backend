@@ -6,7 +6,7 @@ import (
 	"math"
 	"sort"
 
-	"github.com/tyler180/dynasty-ff-backend/internal/analysis/source"
+	source "github.com/tyler180/dynasty-ff-models/analysis"
 )
 
 const minimumReplacementGames = 8

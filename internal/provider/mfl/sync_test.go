@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tyler180/dynasty-ff-backend/internal/analysis/source"
+	source "github.com/tyler180/dynasty-ff-models/analysis"
 )
 
 type fakeCaller struct {
@@ -72,7 +72,7 @@ func TestSyncRefreshesMFLFieldsAndPreservesLeagueSpecificInputs(t *testing.T) {
 	if snapshot.Draft.CurrentYearPicks[0].Salary != 15 || snapshot.Draft.CurrentYearPicks[1].Salary != 7 {
 		t.Fatalf("pick salaries were not preserved: %+v", snapshot.Draft.CurrentYearPicks)
 	}
-	if snapshot.Draft.Status != "in_progress" || snapshot.Draft.MFLMessage != "Team McLean is on the clock" {
+	if snapshot.Draft.Status != "in_progress" || snapshot.Draft.StatusMessage != "Team McLean is on the clock" {
 		t.Fatalf("draft status = %+v", snapshot.Draft)
 	}
 	pool, ok := object(result.Extra["available_rookie_pool"])
@@ -188,7 +188,7 @@ func TestSyncLiveDraftExcludesJustSelectedRookie(t *testing.T) {
 	if intField(pool, "unrostered_supported_position_count") != 0 {
 		t.Fatalf("live drafted player remained available: %#v", pool)
 	}
-	if result.Snapshot.Draft.Status != "in_progress" || !strings.Contains(result.Snapshot.Draft.MFLMessage, "1.07") {
+	if result.Snapshot.Draft.Status != "in_progress" || !strings.Contains(result.Snapshot.Draft.StatusMessage, "1.07") {
 		t.Fatalf("live draft state = %+v", result.Snapshot.Draft)
 	}
 	if got := pickLabels(result.Snapshot.Draft.CurrentYearPicks); !reflect.DeepEqual(got, []string{"2.06"}) {
