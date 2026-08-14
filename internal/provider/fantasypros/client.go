@@ -64,49 +64,54 @@ func (c *Client) Evaluations(ctx context.Context, season int) ([]Evaluation, err
 	}
 	values := make(map[string]*Evaluation)
 	for _, rankingType := range []string{"ROOKIES", "DYNASTY"} {
-		payload, err := c.get(ctx, apiKey, fmt.Sprintf("nfl/%d/consensus-rankings", season), url.Values{
-			"position": {"ALL"}, "type": {rankingType}, "scoring": {"PPR"}, "include_idp": {"true"},
-		})
-		if err != nil {
-			return nil, err
-		}
-		var response rankingResponse
-		if err := json.Unmarshal(payload, &response); err != nil {
-			return nil, fmt.Errorf("decode FantasyPros %s rankings: %w", strings.ToLower(rankingType), err)
-		}
-		for _, ranked := range response.Players {
-			id := ranked.id()
-			if id == "" {
-				continue
+		for _, position := range []string{"ALL", "IDP"} {
+			payload, err := c.get(ctx, apiKey, fmt.Sprintf("nfl/%d/consensus-rankings", season), url.Values{
+				"position": {position}, "type": {rankingType}, "scoring": {"PPR"}, "include_idp": {"true"},
+			})
+			if err != nil {
+				return nil, err
 			}
-			item := evaluation(values, id)
-			item.mergeIdentity(ranked.Name, ranked.Position, ranked.Team)
-			if rankingType == "ROOKIES" {
-				item.RookieRank = ranked.Rank.Float64()
-			} else {
-				item.DynastyRank = ranked.Rank.Float64()
+			var response rankingResponse
+			if err := json.Unmarshal(payload, &response); err != nil {
+				return nil, fmt.Errorf("decode FantasyPros %s %s rankings: %w", strings.ToLower(rankingType), position, err)
+			}
+			for _, ranked := range response.Players {
+				id := ranked.id()
+				if id == "" {
+					continue
+				}
+				item := evaluation(values, id)
+				item.mergeIdentity(ranked.Name, ranked.Position, ranked.Team)
+				if rankingType == "ROOKIES" {
+					item.RookieRank = ranked.Rank.Float64()
+				} else {
+					item.DynastyRank = ranked.Rank.Float64()
+				}
 			}
 		}
 	}
 
-	payload, err := c.get(ctx, apiKey, fmt.Sprintf("nfl/%d/projections", season), url.Values{
-		"position": {"ALL"}, "positions": {"QB:RB:WR:TE:K:DL:LB:DB"}, "week": {"0"},
-	})
-	if err != nil {
-		return nil, err
-	}
-	var projections projectionResponse
-	if err := json.Unmarshal(payload, &projections); err != nil {
-		return nil, fmt.Errorf("decode FantasyPros projections: %w", err)
-	}
-	for _, projected := range projections.Players {
-		id := projected.id()
-		if id == "" {
-			continue
+	for _, query := range []url.Values{
+		{"position": {"ALL"}, "positions": {"QB:RB:WR:TE:K"}, "week": {"0"}},
+		{"position": {"IDP"}, "positions": {"DL:LB:DB"}, "week": {"0"}},
+	} {
+		payload, err := c.get(ctx, apiKey, fmt.Sprintf("nfl/%d/projections", season), query)
+		if err != nil {
+			return nil, err
 		}
-		item := evaluation(values, id)
-		item.mergeIdentity(projected.Name, projected.Position, projected.Team)
-		item.ProjectedPoints = projected.points()
+		var projections projectionResponse
+		if err := json.Unmarshal(payload, &projections); err != nil {
+			return nil, fmt.Errorf("decode FantasyPros %s projections: %w", query.Get("position"), err)
+		}
+		for _, projected := range projections.Players {
+			id := projected.id()
+			if id == "" {
+				continue
+			}
+			item := evaluation(values, id)
+			item.mergeIdentity(projected.Name, projected.Position, projected.Team)
+			item.ProjectedPoints = projected.points()
+		}
 	}
 
 	result := make([]Evaluation, 0, len(values))
