@@ -1,0 +1,72 @@
+name: Update dynasty-ff-models version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "dynasty-ff-models version"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Configure private repo authentication
+        env:
+          GH_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN }}
+        run: |
+          git config --global \
+            url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+
+      - name: Update dynasty-ff-models
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          go get github.com/tyler180/dynasty-ff-models@"$VERSION"
+          go mod tidy
+
+      - name: Create branch and commit
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          BRANCH="deps/dynasty-ff-models-${VERSION}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "$BRANCH"
+
+          git add go.mod go.sum
+          git commit -m "Update dynasty-ff-models to ${VERSION}"
+
+          git push origin "$BRANCH"
+
+          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
+
+      - name: Open pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "Update dynasty-ff-models to ${VERSION}" \
+            --body "Updates \`github.com/tyler180/dynasty-ff-models\` to \`${VERSION}\`."
