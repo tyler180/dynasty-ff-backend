@@ -50,17 +50,32 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 	fallback := strings.ToLower(strings.TrimSpace(request.ProjectionFallback))
 	if fallback == "" || fallback == "auto" {
 		fallback = "none"
-		if len(input.Projections.ByPlayerID) == 0 && len(input.HistoricalPoints.Seasons) > 0 {
+		if projectionCoverage(input) < len(input.Roster) && len(input.HistoricalPoints.Seasons) > 0 {
 			fallback = "historical"
 		}
 	}
 	if fallback != "none" && fallback != "historical" {
 		return Result{}, fmt.Errorf("unknown projection fallback %q; use auto, none, or historical", request.ProjectionFallback)
 	}
+	// Historical is a complete, comparable PPG data set. Do not leave a partial
+	// season-total projection map in place for older model versions to select.
+	if fallback == "historical" {
+		input.Projections.ByPlayerID = nil
+	}
 	analysis := source.AnalyzeWithOptions(input, source.AnalysisOptions{
 		CapReliefTarget: request.CapReliefTarget, ProjectionFallback: fallback,
 	})
 	return Result{SnapshotObservedAt: snapshot.ObservedAt, ProjectionFallback: fallback, Analysis: analysis}, nil
+}
+
+func projectionCoverage(snapshot source.Snapshot) int {
+	covered := 0
+	for _, rostered := range snapshot.Roster {
+		if snapshot.Projections.ByPlayerID[rostered.ID] > 0 {
+			covered++
+		}
+	}
+	return covered
 }
 
 func (s Service) sourceSnapshot(ctx context.Context, snapshot league.Snapshot) (source.Snapshot, error) {

@@ -17,10 +17,12 @@ type roundTripper func(*http.Request) (*http.Response, error)
 func (f roundTripper) RoundTrip(request *http.Request) (*http.Response, error) { return f(request) }
 
 func TestClientCombinesRankingsAndProjections(t *testing.T) {
+	requested := map[string]bool{}
 	httpClient := &http.Client{Transport: roundTripper(func(request *http.Request) (*http.Response, error) {
 		if request.Header.Get("x-api-key") != "test-key" {
 			t.Fatal("FantasyPros API key header is missing")
 		}
+		requested[request.URL.Query().Get("type")+":"+request.URL.Query().Get("position")] = true
 		body := `{"players":[]}`
 		switch request.URL.Query().Get("type") {
 		case "ROOKIES":
@@ -46,5 +48,10 @@ func TestClientCombinesRankingsAndProjections(t *testing.T) {
 	got := values[0]
 	if got.FantasyProsID != "28138" || got.RookieRank != 2.5 || got.DynastyRank != 80 || got.ProjectedPoints != 150.5 || got.MarketValue == 0 {
 		t.Fatalf("evaluation = %+v", got)
+	}
+	for _, request := range []string{"ROOKIES:ALL", "ROOKIES:IDP", "DYNASTY:ALL", "DYNASTY:IDP", ":ALL", ":IDP"} {
+		if !requested[request] {
+			t.Errorf("missing FantasyPros request %q; got %v", request, requested)
+		}
 	}
 }

@@ -170,14 +170,16 @@ player profiles in DynamoDB:
 ```
 
 `projection_fallback` accepts `auto`, `historical`, or `none`. `auto` uses the
-persisted MFL league-scored history when explicit projections are absent. The
+persisted MFL league-scored history unless explicit projections cover the full
+roster, preventing a partial provider response from silently excluding players. The
 response includes the exact snapshot timestamp used, cap and roster compliance,
 draft-pick fit, taxi eligibility, and replacement-aware drop classifications.
 The response also contains a rookie board built only from players currently in
 MFL's free-agent rookie pool. Official FantasyPros rookie/dynasty ECR and
-preseason PPR projections are resolved through canonical identities before
-being persisted. A coverage warning reports unranked MFL rookies rather than
-silently dropping them. Market values are a transparent exponential transform
+preseason PPR projections are fetched for offensive and IDP positions, resolved
+through canonical identities, and persisted. The board reports ranked and unranked
+candidate counts and retains unranked MFL rookies instead of silently dropping
+them. Market values are a transparent exponential transform
 of ECR for ordering; they are not projected fantasy points, and IDP values still
 need league-specific interpretation.
 

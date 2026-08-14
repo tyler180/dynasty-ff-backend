@@ -76,3 +76,46 @@ func TestAnalyzeLatestNormalizedSnapshot(t *testing.T) {
 		t.Fatalf("candidate name = %q", got)
 	}
 }
+
+func TestAutoFallbackUsesHistoryWhenProjectionsOnlyCoverPartOfRoster(t *testing.T) {
+	observedAt := time.Date(2026, 8, 13, 23, 11, 52, 0, time.UTC)
+	firstID, secondID := player.ID("player-1"), player.ID("player-2")
+	birthDate := time.Date(1997, 1, 1, 0, 0, 0, 0, time.UTC)
+	service := Service{
+		Snapshots: fakeSnapshots{snapshot: league.Snapshot{
+			League:    league.League{ID: "79286", Name: "League", Season: 2026, SalaryCap: 250, ActiveRosterLimit: 26},
+			Franchise: league.Franchise{ID: "0005", Name: "Team McLean"},
+			Roster: []league.RosterAssignment{
+				{PlayerID: firstID, Status: league.RosterActive, Position: "WR", Salary: 10, CurrentCapHit: 10},
+				{PlayerID: secondID, Status: league.RosterActive, Position: "RB", Salary: 10, CurrentCapHit: 10},
+			},
+			Projections: league.Projections{Season: 2026, Source: "partial", ByPlayerID: map[string]float64{string(firstID): 200}},
+			HistoricalPoints: league.HistoricalPoints{Source: "MFL", Seasons: []league.HistoricalSeason{{
+				Season:                2025,
+				ByPlayerID:            map[string]float64{string(firstID): 170, string(secondID): 136},
+				GamesPlayedByPlayerID: map[string]int{string(firstID): 17, string(secondID): 17},
+			}}},
+			ObservedAt: observedAt,
+		}},
+		Players: fakePlayers{
+			firstID:  {ID: firstID, DisplayName: "First", BirthDate: &birthDate},
+			secondID: {ID: secondID, DisplayName: "Second", BirthDate: &birthDate},
+		},
+	}
+
+	result, err := service.Analyze(context.Background(), Request{
+		Year: 2026, LeagueID: "79286", FranchiseID: "0005", ProjectionFallback: "auto",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ProjectionFallback != "historical" {
+		t.Fatalf("projection fallback = %q, want historical", result.ProjectionFallback)
+	}
+	if got := len(result.Analysis.DropEvaluation.Candidates); got != 2 {
+		t.Fatalf("drop candidates = %d, want 2: %+v", got, result.Analysis.DropEvaluation)
+	}
+	if result.Analysis.DropEvaluation.ProductionMetric != "historical points per game" {
+		t.Fatalf("production metric = %q", result.Analysis.DropEvaluation.ProductionMetric)
+	}
+}
