@@ -174,14 +174,16 @@ persisted MFL league-scored history unless explicit projections cover the full
 roster, preventing a partial provider response from silently excluding players. The
 response includes the exact snapshot timestamp used, cap and roster compliance,
 draft-pick fit, taxi eligibility, and replacement-aware drop classifications.
-The response also contains separate offense and IDP rookie boards built only
-from players currently in MFL's free-agent rookie pool. Official FantasyPros rookie/dynasty ECR and
-preseason PPR projections are fetched for offensive and IDP positions, resolved
-through canonical identities, and persisted. Each board restarts its model rank
-at one and reports ranked and unranked candidate counts. Unranked MFL rookies
-remain visible instead of being silently dropped. Market values are a transparent
-exponential transform of ECR for ordering within a board; offense and IDP values
-must not be compared until IDP scarcity is calibrated to the league's scoring.
+The response contains separate offense and IDP rookie boards built only from
+players currently in MFL's free-agent rookie pool. Official FantasyPros
+rookie/dynasty ECR and preseason PPR projections provide the top-of-board signal.
+MFL's read-only aggregate ADP from recent real rookie-only drafts matching the
+league size adds a deeper market signal; the 5% selection cutoff typically reaches
+about six rounds in a 12-team league.
+Each board reports ranked and unranked candidate counts and retains unranked MFL
+rookies instead of silently dropping them. Market values are a transparent
+exponential transform of ECR for ordering; rookie ADP remains separately visible,
+and offense and IDP values are not compared across boards.
 
 The Lambda reads both provider credentials from the configured Secrets Manager
 secret:

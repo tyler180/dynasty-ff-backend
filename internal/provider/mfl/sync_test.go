@@ -82,6 +82,9 @@ func TestSyncRefreshesMFLFieldsAndPreservesLeagueSpecificInputs(t *testing.T) {
 	if len(snapshot.RookieCandidates) != 1 || snapshot.RookieCandidates[0].ID != "17000" {
 		t.Fatalf("rookie candidates = %+v", snapshot.RookieCandidates)
 	}
+	if snapshot.RookieCandidates[0].RookieADP != 24.75 {
+		t.Fatalf("rookie ADP = %+v", snapshot.RookieCandidates[0])
+	}
 	if len(result.Warnings) != 0 {
 		t.Fatalf("warnings = %v", result.Warnings)
 	}
@@ -252,6 +255,10 @@ func fixtureCaller() *fakeCaller {
 		"get_free_agents": map[string]any{"freeAgents": map[string]any{"leagueUnit": map[string]any{"player": []any{
 			map[string]any{"id": "17000"}, map[string]any{"id": "15751"},
 		}}}},
+		"get_rookie_adp": map[string]any{"adp": map[string]any{"player": []any{
+			map[string]any{"id": "17000", "averagePick": "24.75", "rank": "40"},
+			map[string]any{"id": "17001", "averagePick": "30.00", "rank": "50"},
+		}}},
 		"get_assets": map[string]any{"assets": map[string]any{"franchise": []any{
 			map[string]any{"id": "0005", "currentYearDraftPick": []any{
 				map[string]any{"id": "DP_00_05", "originalFranchise": "0005"},

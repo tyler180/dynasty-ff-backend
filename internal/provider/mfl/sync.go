@@ -198,6 +198,21 @@ func Sync(ctx context.Context, caller Caller, base BaseDocument, options Options
 	if haveFreeAgents {
 		snapshot.RookieCandidates = availableRookies(freeAgentsPayload, catalog, options.Year, draftedPlayerIDs)
 		extra["available_rookie_pool"] = availableRookieSummary(snapshot.RookieCandidates)
+		var adpPayload map[string]any
+		franchiseCount := supportedADPFranchiseCount(teamCount(leaguePayload, 12))
+		if callOptional(ctx, caller, "get_rookie_adp", map[string]any{
+			"year": options.Year, "period": "RECENT", "franchise_count": franchiseCount,
+			"scoring": "ALL", "cutoff": 5,
+		}, &adpPayload, &warnings) {
+			matched, observations := applyRookieADP(snapshot.RookieCandidates, adpPayload)
+			extra["rookie_adp"] = map[string]any{
+				"source": "MFL recent real rookie-only drafts", "franchise_count": franchiseCount,
+				"minimum_selection_percentage": 5, "observations": observations, "available_rookies_matched": matched,
+			}
+			if matched == 0 {
+				warnings = append(warnings, "MFL rookie-only ADP did not match any currently available rookies")
+			}
+		}
 	}
 
 	if options.Projections != nil {
@@ -212,6 +227,15 @@ func Sync(ctx context.Context, caller Caller, base BaseDocument, options Options
 		return Result{}, err
 	}
 	return Result{Snapshot: snapshot, Extra: extra, Warnings: warnings, SyncedAt: options.SnapshotDate}, nil
+}
+
+func supportedADPFranchiseCount(count int) int {
+	switch count {
+	case 8, 10, 12, 14, 16:
+		return count
+	default:
+		return 12
+	}
 }
 
 func mergeExtraObject(existing any, overlay map[string]any) map[string]any {

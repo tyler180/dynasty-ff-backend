@@ -2,6 +2,7 @@ package mflingest
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,7 +70,7 @@ func TestEnrichEvaluationsJoinsThroughCanonicalIdentities(t *testing.T) {
 	snapshot := source.Snapshot{
 		Roster: []source.Player{{ID: "15751", Name: "Veteran"}},
 		RookieCandidates: []source.RookieCandidate{{
-			ID: "17000", Name: "Rookie", Position: "WR", RookieYear: 2026, Source: "MFL",
+			ID: "17000", Name: "Rookie", Position: "WR", RookieYear: 2026, RookieADP: 25.5, Source: "MFL rookie-only ADP",
 		}},
 	}
 	warnings, err := enrichEvaluations(context.Background(), &snapshot, 2026, time.Date(2026, 8, 13, 0, 0, 0, 0, time.UTC), identities, fakeEvaluations{
@@ -82,7 +83,7 @@ func TestEnrichEvaluationsJoinsThroughCanonicalIdentities(t *testing.T) {
 	if len(warnings) != 0 {
 		t.Fatalf("warnings = %v", warnings)
 	}
-	if got := snapshot.RookieCandidates[0]; got.MarketValue != 4000 || got.ProjectedPoints[2026] != 120 {
+	if got := snapshot.RookieCandidates[0]; got.MarketValue != 4000 || got.RookieADP != 25.5 || got.ProjectedPoints[2026] != 120 || !strings.Contains(got.Source, "MFL rookie-only ADP") {
 		t.Fatalf("rookie = %+v", got)
 	}
 	if got := snapshot.Projections.ByPlayerID["15751"]; got != 250 {

@@ -97,6 +97,7 @@ type RookieCandidate struct {
 	NFLTeam         string          `json:"nfl_team,omitempty"`
 	RookieYear      int             `json:"rookie_year"`
 	RookieRank      float64         `json:"rookie_rank,omitempty"`
+	RookieADP       float64         `json:"rookie_adp,omitempty"`
 	DynastyRank     float64         `json:"dynasty_rank,omitempty"`
 	MarketValue     float64         `json:"market_value,omitempty"`
 	ProjectedPoints map[int]float64 `json:"projected_points,omitempty"`

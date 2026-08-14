@@ -120,7 +120,8 @@ func NormalizeRecords(ctx context.Context, snapshot source.Snapshot, resolver Pl
 		}
 		records.LeagueSnapshot.RookieCandidates = append(records.LeagueSnapshot.RookieCandidates, league.RookieCandidate{
 			PlayerID: profile.ID, Position: candidate.Position, NFLTeam: candidate.NFLTeam, RookieYear: candidate.RookieYear,
-			RookieRank: candidate.RookieRank, DynastyRank: candidate.DynastyRank, MarketValue: candidate.MarketValue,
+			RookieRank: candidate.RookieRank, RookieADP: candidate.RookieADP,
+			DynastyRank: candidate.DynastyRank, MarketValue: candidate.MarketValue,
 			ProjectedPoints: cloneYearFloatMap(candidate.ProjectedPoints), Source: candidate.Source, UpdatedAt: candidate.UpdatedAt,
 		})
 	}
