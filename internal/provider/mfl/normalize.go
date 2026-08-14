@@ -286,6 +286,34 @@ func availableRookieSummary(candidates []source.RookieCandidate) map[string]any 
 	}
 }
 
+func applyRookieADP(candidates []source.RookieCandidate, payload map[string]any) (int, int) {
+	adpByPlayerID := make(map[string]float64)
+	root := envelope(payload, "adp")
+	for _, value := range values(root["player"]) {
+		observation, ok := object(value)
+		if !ok {
+			continue
+		}
+		id := textField(observation, "id")
+		averagePick, ok := numberField(observation, "averagePick")
+		if id == "" || !ok || averagePick <= 0 {
+			continue
+		}
+		adpByPlayerID[id] = averagePick
+	}
+	matched := 0
+	for index := range candidates {
+		averagePick, ok := adpByPlayerID[candidates[index].ID]
+		if !ok {
+			continue
+		}
+		candidates[index].RookieADP = averagePick
+		candidates[index].Source = "MFL free-agent rookie pool and MFL rookie-only ADP"
+		matched++
+	}
+	return matched, len(adpByPlayerID)
+}
+
 func ownedCurrentPicks(payload map[string]any, franchiseID string, base BaseDocument, franchiseNames map[string]string, teamCount int) ([]source.Pick, bool) {
 	root := envelope(payload, "assets")
 	var selected map[string]any

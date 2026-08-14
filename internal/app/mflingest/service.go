@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/tyler180/dynasty-ff-backend/internal/app/draftanalysis"
@@ -164,7 +165,7 @@ func enrichEvaluations(
 		candidate.DynastyRank = value.DynastyRank
 		candidate.MarketValue = value.MarketValue
 		candidate.ProjectedPoints = map[int]float64{season: value.ProjectedPoints}
-		candidate.Source = sourceName
+		candidate.Source = appendObservationSource(candidate.Source, sourceName)
 		candidate.UpdatedAt = observedAt.UTC().Format(time.RFC3339)
 	}
 	if snapshot.Projections.ByPlayerID == nil {
@@ -185,12 +186,23 @@ func enrichEvaluations(
 	}
 	valued := 0
 	for _, candidate := range snapshot.RookieCandidates {
-		if candidate.MarketValue > 0 || candidate.RookieRank > 0 || candidate.ProjectedPoints[season] > 0 {
+		if candidate.MarketValue > 0 || candidate.RookieRank > 0 || candidate.RookieADP > 0 || candidate.ProjectedPoints[season] > 0 {
 			valued++
 		}
 	}
 	if valued < len(snapshot.RookieCandidates) {
-		return []string{fmt.Sprintf("FantasyPros valued %d of %d currently available MFL rookies; unranked players remain visible but are not ranked", valued, len(snapshot.RookieCandidates))}, nil
+		return []string{fmt.Sprintf("MFL rookie ADP and FantasyPros valued %d of %d currently available MFL rookies; unranked players remain visible but are not ranked", valued, len(snapshot.RookieCandidates))}, nil
 	}
 	return nil, nil
+}
+
+func appendObservationSource(existing, added string) string {
+	existing = strings.TrimSpace(existing)
+	if existing == "" {
+		return added
+	}
+	if strings.Contains(existing, added) {
+		return existing
+	}
+	return existing + "; " + added
 }

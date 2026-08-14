@@ -154,7 +154,7 @@ func (s Service) sourceSnapshot(ctx context.Context, snapshot league.Snapshot) (
 		}
 		result.RookieCandidates = append(result.RookieCandidates, source.RookieCandidate{
 			ID: string(candidate.PlayerID), Name: profile.DisplayName, Position: candidate.Position,
-			NFLTeam: candidate.NFLTeam, RookieYear: candidate.RookieYear, RookieRank: candidate.RookieRank,
+			NFLTeam: candidate.NFLTeam, RookieYear: candidate.RookieYear, RookieRank: candidate.RookieRank, RookieADP: candidate.RookieADP,
 			DynastyRank: candidate.DynastyRank, MarketValue: candidate.MarketValue,
 			ProjectedPoints: cloneYearFloatMap(candidate.ProjectedPoints), Source: candidate.Source, UpdatedAt: candidate.UpdatedAt,
 		})
