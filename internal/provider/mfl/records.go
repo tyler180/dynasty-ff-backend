@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	source "github.com/tyler180/dynasty-ff-models/analysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
+	source "github.com/tyler180/dynasty-ff-models/analysis"
 )
 
 // PlayerResolver is the identity capability needed to translate provider IDs
@@ -113,6 +113,17 @@ func NormalizeRecords(ctx context.Context, snapshot source.Snapshot, resolver Pl
 	}
 	records.LeagueSnapshot.HistoricalPoints = normalizeHistoricalPoints(snapshot.HistoricalPoints, canonicalByMFLID)
 	records.LeagueSnapshot.Projections = normalizeProjections(snapshot.Projections, canonicalByMFLID)
+	for _, candidate := range snapshot.RookieCandidates {
+		profile, err := resolver.ResolvePlayer(ctx, player.ExternalID{Provider: player.ProviderMFL, Value: candidate.ID})
+		if err != nil {
+			return NormalizedRecords{}, fmt.Errorf("resolve available rookie MFL player %s: %w", candidate.ID, err)
+		}
+		records.LeagueSnapshot.RookieCandidates = append(records.LeagueSnapshot.RookieCandidates, league.RookieCandidate{
+			PlayerID: profile.ID, Position: candidate.Position, NFLTeam: candidate.NFLTeam, RookieYear: candidate.RookieYear,
+			RookieRank: candidate.RookieRank, DynastyRank: candidate.DynastyRank, MarketValue: candidate.MarketValue,
+			ProjectedPoints: cloneYearFloatMap(candidate.ProjectedPoints), Source: candidate.Source, UpdatedAt: candidate.UpdatedAt,
+		})
+	}
 
 	for _, pick := range snapshot.Draft.CurrentYearPicks {
 		round, number := parsePickLabel(pick.Pick)
@@ -167,6 +178,17 @@ func cloneFloatMap(values map[string]float64) map[string]float64 {
 		return nil
 	}
 	result := make(map[string]float64, len(values))
+	for key, value := range values {
+		result[key] = value
+	}
+	return result
+}
+
+func cloneYearFloatMap(values map[int]float64) map[int]float64 {
+	if len(values) == 0 {
+		return nil
+	}
+	result := make(map[int]float64, len(values))
 	for key, value := range values {
 		result[key] = value
 	}

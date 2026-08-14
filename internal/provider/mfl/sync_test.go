@@ -79,6 +79,9 @@ func TestSyncRefreshesMFLFieldsAndPreservesLeagueSpecificInputs(t *testing.T) {
 	if !ok || intField(pool, "unrostered_supported_position_count") != 1 {
 		t.Fatalf("available rookie pool = %#v", result.Extra["available_rookie_pool"])
 	}
+	if len(snapshot.RookieCandidates) != 1 || snapshot.RookieCandidates[0].ID != "17000" {
+		t.Fatalf("rookie candidates = %+v", snapshot.RookieCandidates)
+	}
 	if len(result.Warnings) != 0 {
 		t.Fatalf("warnings = %v", result.Warnings)
 	}

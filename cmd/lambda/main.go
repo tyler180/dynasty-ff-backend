@@ -14,6 +14,7 @@ import (
 	"github.com/tyler180/dynasty-ff-backend/internal/app/snapshotanalysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/lambdaapp"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/dynastyprocess"
+	"github.com/tyler180/dynasty-ff-backend/internal/provider/fantasypros"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/mflcredentials"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/mflidentity"
 	"github.com/tyler180/dynasty-ff-backend/internal/storage/dynamodbidentity"
@@ -61,6 +62,14 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	fantasyProsKeys, err := fantasypros.NewSecretProviderFromConfig(awsConfig, secretARN)
+	if err != nil {
+		return nil, err
+	}
+	playerEvaluations, err := fantasypros.NewDefault(fantasyProsKeys)
+	if err != nil {
+		return nil, err
+	}
 	handler, err := lambdaapp.New(snapshots, identities)
 	if err != nil {
 		return nil, err
@@ -80,7 +89,7 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 	handler.WithAnalyzer(snapshotanalysis.Service{Snapshots: snapshots, Players: identities})
 	return handler.WithSyncer(mflingest.Service{
 		MCPCommand: mcpCommand, Credentials: credentials,
-		Identities: identities, Snapshots: snapshots,
+		Identities: identities, Snapshots: snapshots, Evaluations: playerEvaluations,
 	}), nil
 }
 

@@ -196,7 +196,8 @@ func Sync(ctx context.Context, caller Caller, base BaseDocument, options Options
 		}
 	}
 	if haveFreeAgents {
-		extra["available_rookie_pool"] = availableRookieSummary(freeAgentsPayload, catalog, options.Year, draftedPlayerIDs)
+		snapshot.RookieCandidates = availableRookies(freeAgentsPayload, catalog, options.Year, draftedPlayerIDs)
+		extra["available_rookie_pool"] = availableRookieSummary(snapshot.RookieCandidates)
 	}
 
 	if options.Projections != nil {

@@ -173,19 +173,27 @@ player profiles in DynamoDB:
 persisted MFL league-scored history when explicit projections are absent. The
 response includes the exact snapshot timestamp used, cap and roster compliance,
 draft-pick fit, taxi eligibility, and replacement-aware drop classifications.
-Rookie selection rankings remain unavailable until a rookie projection/value
-feed is persisted; the response reports that limitation rather than inventing
-rankings. Deploy this version and run `sync_mfl` once before the first analysis
-so the latest snapshot includes the newly persisted position and history facts.
+The response also contains a rookie board built only from players currently in
+MFL's free-agent rookie pool. Official FantasyPros rookie/dynasty ECR and
+preseason PPR projections are resolved through canonical identities before
+being persisted. A coverage warning reports unranked MFL rookies rather than
+silently dropping them. Market values are a transparent exponential transform
+of ECR for ordering; they are not projected fantasy points, and IDP values still
+need league-specific interpretation.
 
-The Lambda reads its MFL credential from the configured Secrets Manager secret.
-The supported minimal secret shape is:
+The Lambda reads both provider credentials from the configured Secrets Manager
+secret:
 
 ```json
-{"api_key":"read-only-owner-api-key"}
+{
+  "api_key": "read-only-owner-api-key",
+  "fantasypros_api_key": "personal-fantasypros-api-key"
+}
 ```
 
-Alternatively, use `{"user_cookie":"MFL_USER_ID cookie value"}`. The owner API
-key is preferable because it cannot authorize MFL imports. Scheduled sync is
-disabled by default; set `mfl_sync_schedule_expression` only after the identity
-aliases and credential secret are ready.
+For MFL, `user_cookie` can replace `api_key`; the owner API key is preferable
+because it cannot authorize MFL imports. FantasyPros data use is subject to the
+API account's license and must remain personal/non-commercial unless a different
+license is obtained. Scheduled sync is disabled by default; set
+`mfl_sync_schedule_expression` only after the identities and credentials are
+ready.

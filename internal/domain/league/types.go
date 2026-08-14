@@ -32,6 +32,7 @@ type Snapshot struct {
 	HistoricalPoints        HistoricalPoints   `json:"historical_points,omitempty"`
 	ReplacementLevels       ReplacementLevels  `json:"replacement_levels,omitempty"`
 	Projections             Projections        `json:"projections,omitempty"`
+	RookieCandidates        []RookieCandidate  `json:"rookie_candidates,omitempty"`
 	ObservedAt              time.Time          `json:"observed_at"`
 	Source                  string             `json:"source"`
 }
@@ -88,6 +89,19 @@ type Projections struct {
 	Season     int                `json:"season,omitempty"`
 	Source     string             `json:"source,omitempty"`
 	ByPlayerID map[string]float64 `json:"by_player_id,omitempty"`
+}
+
+type RookieCandidate struct {
+	PlayerID        player.ID       `json:"player_id"`
+	Position        string          `json:"position"`
+	NFLTeam         string          `json:"nfl_team,omitempty"`
+	RookieYear      int             `json:"rookie_year"`
+	RookieRank      float64         `json:"rookie_rank,omitempty"`
+	DynastyRank     float64         `json:"dynasty_rank,omitempty"`
+	MarketValue     float64         `json:"market_value,omitempty"`
+	ProjectedPoints map[int]float64 `json:"projected_points,omitempty"`
+	Source          string          `json:"source"`
+	UpdatedAt       string          `json:"updated_at,omitempty"`
 }
 
 type DraftAsset struct {

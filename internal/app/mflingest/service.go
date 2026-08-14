@@ -11,12 +11,19 @@ import (
 	"github.com/tyler180/dynasty-ff-backend/internal/app/draftanalysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity"
+	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
+	"github.com/tyler180/dynasty-ff-backend/internal/provider/fantasypros"
 	mflsync "github.com/tyler180/dynasty-ff-backend/internal/provider/mfl"
 	"github.com/tyler180/dynasty-ff-backend/internal/storage/leaguestore"
+	source "github.com/tyler180/dynasty-ff-models/analysis"
 )
 
 type Credentials interface {
 	Environment(context.Context) (map[string]string, error)
+}
+
+type Evaluations interface {
+	Evaluations(context.Context, int) ([]fantasypros.Evaluation, error)
 }
 
 type Request struct {
@@ -40,6 +47,7 @@ type Service struct {
 	Credentials Credentials
 	Identities  identity.Repository
 	Snapshots   leaguestore.Writer
+	Evaluations Evaluations
 	Now         func() time.Time
 }
 
@@ -47,8 +55,8 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	if s.MCPCommand == "" {
 		return Result{}, fmt.Errorf("MFL MCP command is required")
 	}
-	if s.Credentials == nil || s.Identities == nil || s.Snapshots == nil {
-		return Result{}, fmt.Errorf("MFL credentials, identity repository, and snapshot repository are required")
+	if s.Credentials == nil || s.Identities == nil || s.Snapshots == nil || s.Evaluations == nil {
+		return Result{}, fmt.Errorf("MFL credentials, identity repository, snapshot repository, and player evaluations are required")
 	}
 	if request.Year < 2000 || request.Year > 2100 || request.LeagueID == "" || request.FranchiseID == "" {
 		return Result{}, fmt.Errorf("MFL year, league ID, and franchise ID are required")
@@ -89,6 +97,10 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	evaluationWarnings, err := enrichEvaluations(ctx, &loaded.Snapshot, request.Year, loaded.Refresh.SyncedAt, s.Identities, s.Evaluations)
+	if err != nil {
+		return Result{}, err
+	}
 	records, err := mflsync.NormalizeRecords(ctx, loaded.Snapshot, s.Identities, loaded.Refresh.SyncedAt)
 	if err != nil {
 		return Result{}, err
@@ -98,7 +110,87 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	}
 	return Result{
 		Snapshot: records.LeagueSnapshot,
-		Warnings: append([]string(nil), loaded.Refresh.Warnings...),
+		Warnings: append(append([]string(nil), loaded.Refresh.Warnings...), evaluationWarnings...),
 		SyncedAt: loaded.Refresh.SyncedAt,
 	}, nil
+}
+
+func enrichEvaluations(
+	ctx context.Context,
+	snapshot *source.Snapshot,
+	season int,
+	observedAt time.Time,
+	identities identity.Repository,
+	provider Evaluations,
+) ([]string, error) {
+	values, err := provider.Evaluations(ctx, season)
+	if err != nil {
+		return nil, err
+	}
+	bulk, ok := identities.(identity.BulkResolver)
+	if !ok {
+		return nil, fmt.Errorf("identity repository does not support batch resolution for FantasyPros values")
+	}
+	externalIDs := make([]player.ExternalID, 0, len(values))
+	byExternalID := make(map[player.ExternalID]fantasypros.Evaluation, len(values))
+	for _, value := range values {
+		if value.FantasyProsID == "" {
+			continue
+		}
+		externalID := player.ExternalID{Provider: player.ProviderFantasyPros, Value: value.FantasyProsID}
+		externalIDs = append(externalIDs, externalID)
+		byExternalID[externalID] = value
+	}
+	resolved, err := bulk.ResolvePlayers(ctx, externalIDs)
+	if err != nil {
+		return nil, fmt.Errorf("resolve FantasyPros evaluations: %w", err)
+	}
+	byCanonicalID := make(map[player.ID]fantasypros.Evaluation, len(resolved))
+	for externalID, profile := range resolved {
+		byCanonicalID[profile.ID] = byExternalID[externalID]
+	}
+	const sourceName = "FantasyPros rookie/dynasty ECR and PPR preseason projections"
+	for index := range snapshot.RookieCandidates {
+		candidate := &snapshot.RookieCandidates[index]
+		profile, err := identities.ResolvePlayer(ctx, player.ExternalID{Provider: player.ProviderMFL, Value: candidate.ID})
+		if err != nil {
+			return nil, fmt.Errorf("resolve available rookie MFL player %s: %w", candidate.ID, err)
+		}
+		value, found := byCanonicalID[profile.ID]
+		if !found {
+			continue
+		}
+		candidate.RookieRank = value.RookieRank
+		candidate.DynastyRank = value.DynastyRank
+		candidate.MarketValue = value.MarketValue
+		candidate.ProjectedPoints = map[int]float64{season: value.ProjectedPoints}
+		candidate.Source = sourceName
+		candidate.UpdatedAt = observedAt.UTC().Format(time.RFC3339)
+	}
+	if snapshot.Projections.ByPlayerID == nil {
+		snapshot.Projections.ByPlayerID = map[string]float64{}
+	}
+	for _, rostered := range snapshot.Roster {
+		profile, err := identities.ResolvePlayer(ctx, player.ExternalID{Provider: player.ProviderMFL, Value: rostered.ID})
+		if err != nil {
+			return nil, fmt.Errorf("resolve roster projection MFL player %s: %w", rostered.ID, err)
+		}
+		if value, found := byCanonicalID[profile.ID]; found && value.ProjectedPoints > 0 {
+			snapshot.Projections.ByPlayerID[rostered.ID] = value.ProjectedPoints
+		}
+	}
+	if len(snapshot.Projections.ByPlayerID) > 0 {
+		snapshot.Projections.Season = season
+		snapshot.Projections.Source = sourceName
+	}
+	valued := 0
+	for _, candidate := range snapshot.RookieCandidates {
+		if candidate.MarketValue > 0 || candidate.RookieRank > 0 || candidate.ProjectedPoints[season] > 0 {
+			valued++
+		}
+	}
+	if valued < len(snapshot.RookieCandidates) {
+		return []string{fmt.Sprintf("FantasyPros valued %d of %d currently available MFL rookies; unranked players remain visible but are not ranked", valued, len(snapshot.RookieCandidates))}, nil
+	}
+	return nil, nil
 }

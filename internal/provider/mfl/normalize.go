@@ -249,7 +249,7 @@ func birthdates(payload map[string]any) map[string]int64 {
 	return result
 }
 
-func availableRookieSummary(payload map[string]any, catalog map[string]catalogPlayer, year int, excluded map[string]bool) map[string]any {
+func availableRookies(payload map[string]any, catalog map[string]catalogPlayer, year int, excluded map[string]bool) []source.RookieCandidate {
 	ids := make(map[string]bool)
 	walkObjects(envelope(payload, "freeAgents"), func(item map[string]any) {
 		id := textField(item, "id")
@@ -257,17 +257,31 @@ func availableRookieSummary(payload map[string]any, catalog map[string]catalogPl
 			ids[id] = true
 		}
 	})
-	counts := make(map[string]int)
+	result := make([]source.RookieCandidate, 0, len(ids))
 	for id := range ids {
-		if position := catalog[id].Position; position != "" {
-			counts[position]++
+		player := catalog[id]
+		result = append(result, source.RookieCandidate{
+			ID: id, Name: player.Name, Position: player.Position, NFLTeam: player.NFLTeam,
+			RookieYear: year, Source: "MFL free-agent rookie pool",
+		})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	return result
+}
+
+func availableRookieSummary(candidates []source.RookieCandidate) map[string]any {
+	counts := make(map[string]int)
+	ids := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		ids = append(ids, candidate.ID)
+		if candidate.Position != "" {
+			counts[candidate.Position]++
 		}
 	}
 	return map[string]any{
-		"mfl_draft_year":                      year,
-		"unrostered_supported_position_count": len(ids),
+		"unrostered_supported_position_count": len(candidates),
 		"counts_by_position":                  counts,
-		"player_ids":                          sortedKeys(ids),
+		"player_ids":                          ids,
 		"note":                                "Live MFL free-agent rookies; multi-year projections are still required before ranking them.",
 	}
 }
