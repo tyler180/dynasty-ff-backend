@@ -5,8 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tyler180/dynasty-ff-backend/internal/analysis/source"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
+	"github.com/tyler180/dynasty-ff-backend/internal/app/snapshotanalysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
@@ -30,6 +32,12 @@ type fakeIdentities struct{ profile player.Profile }
 type fakeSyncer struct{ result mflingest.Result }
 
 type fakeIdentitySyncer struct{ result identitysync.Result }
+
+type fakeAnalyzer struct{ result snapshotanalysis.Result }
+
+func (f fakeAnalyzer) Analyze(context.Context, snapshotanalysis.Request) (snapshotanalysis.Result, error) {
+	return f.result, nil
+}
 
 func (f fakeIdentitySyncer) Sync(context.Context, identitysync.Request) (identitysync.Result, error) {
 	return f.result, nil
@@ -170,6 +178,24 @@ func TestHandlerReportsPartialIdentitySync(t *testing.T) {
 		t.Fatal(err)
 	}
 	if response.Status != "partial" || response.IdentitySync == nil || response.IdentitySync.Complete {
+		t.Fatalf("response = %+v", response)
+	}
+}
+
+func TestHandlerAnalyzesLatestSnapshot(t *testing.T) {
+	handler, err := New(&fakeSnapshots{}, &fakeIdentities{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := snapshotanalysis.Result{Analysis: source.Analysis{Team: "Team McLean"}}
+	handler.WithAnalyzer(fakeAnalyzer{result: want})
+	response, err := handler.Handle(context.Background(), Request{
+		Action: ActionAnalyze, Season: 2026, LeagueID: "79286", FranchiseID: "0005",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Status != "ok" || response.Analysis == nil || response.Analysis.Analysis.Team != "Team McLean" {
 		t.Fatalf("response = %+v", response)
 	}
 }

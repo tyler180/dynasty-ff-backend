@@ -56,11 +56,22 @@ func NormalizeRecords(ctx context.Context, snapshot source.Snapshot, resolver Pl
 				ID:   league.FranchiseID(snapshot.Franchise.ID),
 				Name: snapshot.Franchise.Name,
 			},
+			DraftStatus: snapshot.Draft.Status,
+			DraftAvailabilityWindow: league.AvailabilityWindow{
+				Start: snapshot.Draft.AvailabilityPollWindow.Start,
+				End:   snapshot.Draft.AvailabilityPollWindow.End,
+			},
+			ReplacementLevels: league.ReplacementLevels{
+				Source: snapshot.ReplacementLevels.Source, Method: snapshot.ReplacementLevels.Method,
+				MinimumHistoricalGames:  snapshot.ReplacementLevels.MinimumHistoricalGames,
+				PointsPerGameByPosition: cloneFloatMap(snapshot.ReplacementLevels.PointsPerGameByPosition),
+			},
 			ObservedAt: observedAt,
 			Source:     "mfl",
 		},
 	}
 
+	canonicalByMFLID := make(map[string]player.ID, len(snapshot.Roster))
 	for _, rostered := range snapshot.Roster {
 		externalID := player.ExternalID{Provider: player.ProviderMFL, Value: rostered.ID}
 		profile, err := resolver.ResolvePlayer(ctx, externalID)
@@ -90,13 +101,18 @@ func NormalizeRecords(ctx context.Context, snapshot source.Snapshot, resolver Pl
 			ResolutionMethod: "identity_repository",
 			IngestedAt:       observedAt,
 		})
+		canonicalByMFLID[rostered.ID] = profile.ID
 		records.LeagueSnapshot.Roster = append(records.LeagueSnapshot.Roster, league.RosterAssignment{
 			PlayerID:      profile.ID,
 			Status:        normalizeRosterStatus(rostered.Status),
+			Position:      rostered.Position,
+			NFLTeam:       rostered.NFLTeam,
 			Salary:        rostered.Salary,
 			CurrentCapHit: rostered.CurrentCapHit,
 		})
 	}
+	records.LeagueSnapshot.HistoricalPoints = normalizeHistoricalPoints(snapshot.HistoricalPoints, canonicalByMFLID)
+	records.LeagueSnapshot.Projections = normalizeProjections(snapshot.Projections, canonicalByMFLID)
 
 	for _, pick := range snapshot.Draft.CurrentYearPicks {
 		round, number := parsePickLabel(pick.Pick)
@@ -113,6 +129,48 @@ func NormalizeRecords(ctx context.Context, snapshot source.Snapshot, resolver Pl
 		return NormalizedRecords{}, err
 	}
 	return records, nil
+}
+
+func normalizeHistoricalPoints(history source.HistoricalPoints, canonicalByMFLID map[string]player.ID) league.HistoricalPoints {
+	result := league.HistoricalPoints{Source: history.Source}
+	for _, season := range history.Seasons {
+		normalized := league.HistoricalSeason{
+			Season: season.Season, ByPlayerID: map[string]float64{}, GamesPlayedByPlayerID: map[string]int{},
+		}
+		for mflID, canonicalID := range canonicalByMFLID {
+			if points, ok := season.ByPlayerID[mflID]; ok {
+				normalized.ByPlayerID[string(canonicalID)] = points
+			}
+			if games, ok := season.GamesPlayedByPlayerID[mflID]; ok {
+				normalized.GamesPlayedByPlayerID[string(canonicalID)] = games
+			}
+		}
+		if len(normalized.ByPlayerID) > 0 {
+			result.Seasons = append(result.Seasons, normalized)
+		}
+	}
+	return result
+}
+
+func normalizeProjections(projections source.Projections, canonicalByMFLID map[string]player.ID) league.Projections {
+	result := league.Projections{Season: projections.Season, Source: projections.Source, ByPlayerID: map[string]float64{}}
+	for mflID, canonicalID := range canonicalByMFLID {
+		if points, ok := projections.ByPlayerID[mflID]; ok {
+			result.ByPlayerID[string(canonicalID)] = points
+		}
+	}
+	return result
+}
+
+func cloneFloatMap(values map[string]float64) map[string]float64 {
+	if len(values) == 0 {
+		return nil
+	}
+	result := make(map[string]float64, len(values))
+	for key, value := range values {
+		result[key] = value
+	}
+	return result
 }
 
 func normalizeRosterStatus(status string) league.RosterStatus {
