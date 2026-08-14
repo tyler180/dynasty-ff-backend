@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.4
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.39.8
 	github.com/modelcontextprotocol/go-sdk v1.4.1
-	github.com/tyler180/dynasty-ff-models v0.0.3
+	github.com/tyler180/dynasty-ff-models v0.0.4
 )
 
 require (
