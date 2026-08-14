@@ -62,6 +62,11 @@ variable "api_key" {
   type      = string
 }
 
+variable "fantasypros_api_key" {
+  sensitive = true
+  type      = string
+}
+
 variable "league_id" {
   type = string
 }

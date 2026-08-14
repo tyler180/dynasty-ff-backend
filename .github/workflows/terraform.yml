@@ -87,6 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TF_VAR_api_key: ${{ secrets.TF_VAR_API_KEY }}
+      TF_VAR_fantasypros_api_key: ${{ secrets.TF_VAR_FANTASYPROS_API_KEY }}
       TF_VAR_username: ${{ secrets.TF_VAR_USERNAME }}
       TF_VAR_password: ${{ secrets.TF_VAR_PASSWORD }}
       TF_VAR_league_id: ${{ secrets.TF_VAR_LEAGUE_ID }}

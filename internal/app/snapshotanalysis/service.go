@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	source "github.com/tyler180/dynasty-ff-models/analysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity"
 	"github.com/tyler180/dynasty-ff-backend/internal/storage/leaguestore"
+	source "github.com/tyler180/dynasty-ff-models/analysis"
 )
 
 type Request struct {
@@ -132,6 +132,18 @@ func (s Service) sourceSnapshot(ctx context.Context, snapshot league.Snapshot) (
 			GamesPlayedByPlayerID: cloneIntMap(season.GamesPlayedByPlayerID),
 		})
 	}
+	for _, candidate := range snapshot.RookieCandidates {
+		profile, err := s.Players.GetPlayer(ctx, candidate.PlayerID)
+		if err != nil {
+			return source.Snapshot{}, fmt.Errorf("load rookie profile %s: %w", candidate.PlayerID, err)
+		}
+		result.RookieCandidates = append(result.RookieCandidates, source.RookieCandidate{
+			ID: string(candidate.PlayerID), Name: profile.DisplayName, Position: candidate.Position,
+			NFLTeam: candidate.NFLTeam, RookieYear: candidate.RookieYear, RookieRank: candidate.RookieRank,
+			DynastyRank: candidate.DynastyRank, MarketValue: candidate.MarketValue,
+			ProjectedPoints: cloneYearFloatMap(candidate.ProjectedPoints), Source: candidate.Source, UpdatedAt: candidate.UpdatedAt,
+		})
+	}
 	return result, nil
 }
 
@@ -164,6 +176,17 @@ func cloneIntMap(values map[string]int) map[string]int {
 		return nil
 	}
 	result := make(map[string]int, len(values))
+	for key, value := range values {
+		result[key] = value
+	}
+	return result
+}
+
+func cloneYearFloatMap(values map[int]float64) map[int]float64 {
+	if len(values) == 0 {
+		return nil
+	}
+	result := make(map[int]float64, len(values))
 	for key, value := range values {
 		result[key] = value
 	}

@@ -27,7 +27,7 @@ output "lambda_function_name" {
 }
 
 output "mfl_secret_arn" {
-  description = "Populate this secret with api_key or user_cookie JSON after apply"
+  description = "Secrets Manager ARN containing MFL and FantasyPros provider credentials"
   value       = module.secrets_manager.secret_arn
 }
 
