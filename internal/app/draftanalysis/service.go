@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tyler180/dynasty-ff-backend/internal/analysis/source"
+	source "github.com/tyler180/dynasty-ff-models/analysis"
 )
 
 type Request struct {

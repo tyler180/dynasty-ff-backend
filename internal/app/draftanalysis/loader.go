@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/tyler180/dynasty-ff-backend/internal/analysis/source"
+	source "github.com/tyler180/dynasty-ff-models/analysis"
 	mflsync "github.com/tyler180/dynasty-ff-backend/internal/provider/mfl"
 )
 

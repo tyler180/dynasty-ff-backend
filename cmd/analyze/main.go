@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tyler180/dynasty-ff-backend/internal/analysis/source"
+	source "github.com/tyler180/dynasty-ff-models/analysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/draftanalysis"
 	inputjson "github.com/tyler180/dynasty-ff-backend/internal/draftadapter/input"
 	"github.com/tyler180/dynasty-ff-models/draft"

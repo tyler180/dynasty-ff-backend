@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/tyler180/dynasty-ff-backend/internal/analysis/source"
+	source "github.com/tyler180/dynasty-ff-models/analysis"
 )
 
 type BaseDocument struct {

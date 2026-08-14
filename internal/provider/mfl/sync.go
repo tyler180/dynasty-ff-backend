@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/tyler180/dynasty-ff-backend/internal/analysis/source"
+	source "github.com/tyler180/dynasty-ff-models/analysis"
 )
 
 type Options struct {
@@ -157,7 +157,7 @@ func Sync(ctx context.Context, caller Caller, base BaseDocument, options Options
 					warnings = append(warnings, "get_draft_results shows no remaining picks for the selected franchise; preserved any configured base picks")
 				}
 			}
-			snapshot.Draft.Status, snapshot.Draft.MFLMessage = draftStatus(draftPayload, snapshot.Draft.Status)
+			snapshot.Draft.Status, snapshot.Draft.StatusMessage = draftStatus(draftPayload, snapshot.Draft.Status)
 		}
 		if options.LiveDraft {
 			var livePayload map[string]any
@@ -170,7 +170,7 @@ func Sync(ctx context.Context, caller Caller, base BaseDocument, options Options
 						snapshot.Draft.Status = live.Status
 					}
 					if live.Message != "" {
-						snapshot.Draft.MFLMessage = live.Message
+						snapshot.Draft.StatusMessage = live.Message
 					}
 					for _, id := range live.DraftedPlayerIDs {
 						draftedPlayerIDs[id] = true
