@@ -51,6 +51,11 @@ func NormalizeRecords(ctx context.Context, snapshot source.Snapshot, resolver Pl
 				ActiveRosterLimit:   snapshot.League.ActiveRosterLimit,
 				InjuredReserveLimit: snapshot.League.InjuredReserveLimit,
 				TaxiSquadLimit:      snapshot.League.TaxiSquadLimit,
+				WaiverType:          snapshot.League.WaiverType,
+				BlindBidBudget:      snapshot.League.BlindBidBudget,
+				BlindBidBalance:     snapshot.League.BlindBidBalance,
+				MinimumBid:          snapshot.League.MinimumBid,
+				BidIncrement:        snapshot.League.BidIncrement,
 			},
 			Franchise: league.Franchise{
 				ID:   league.FranchiseID(snapshot.Franchise.ID),
@@ -65,10 +70,30 @@ func NormalizeRecords(ctx context.Context, snapshot source.Snapshot, resolver Pl
 				Source: snapshot.ReplacementLevels.Source, Method: snapshot.ReplacementLevels.Method,
 				MinimumHistoricalGames:  snapshot.ReplacementLevels.MinimumHistoricalGames,
 				PointsPerGameByPosition: cloneFloatMap(snapshot.ReplacementLevels.PointsPerGameByPosition),
+				CandidatesByPosition:    make(map[string][]league.ReplacementCandidate),
+				BidSource:               snapshot.ReplacementLevels.BidSource, BidMethod: snapshot.ReplacementLevels.BidMethod,
 			},
 			ObservedAt: observedAt,
 			Source:     "mfl",
 		},
+	}
+	for position, candidates := range snapshot.ReplacementLevels.CandidatesByPosition {
+		for _, candidate := range candidates {
+			profile, err := resolver.ResolvePlayer(ctx, player.ExternalID{Provider: player.ProviderMFL, Value: candidate.PlayerID})
+			if err != nil {
+				return NormalizedRecords{}, fmt.Errorf("resolve replacement candidate MFL player %s: %w", candidate.PlayerID, err)
+			}
+			records.LeagueSnapshot.ReplacementLevels.CandidatesByPosition[position] = append(records.LeagueSnapshot.ReplacementLevels.CandidatesByPosition[position], league.ReplacementCandidate{
+				PlayerID: profile.ID, Name: candidate.Name, Position: candidate.Position, NFLTeam: candidate.NFLTeam,
+				RookieYear: candidate.RookieYear, AvailabilityStatus: candidate.AvailabilityStatus, ListedSalary: candidate.ListedSalary,
+				HistoricalPointsPerGame: candidate.HistoricalPointsPerGame, HistoricalGames: candidate.HistoricalGames,
+				EstimatedWinningBid: candidate.EstimatedWinningBid, BidLow: candidate.BidLow, BidHigh: candidate.BidHigh,
+				BidObservations: candidate.BidObservations, HistoricalWinningFranchises: candidate.HistoricalWinningFranchises,
+				BidConfidence: candidate.BidConfidence, Competition: candidate.Competition,
+				DynastyRank: candidate.DynastyRank, MarketValue: candidate.MarketValue,
+				ProjectedPoints: candidate.ProjectedPoints, Source: candidate.Source,
+			})
+		}
 	}
 
 	canonicalByMFLID := make(map[string]player.ID, len(snapshot.Roster))

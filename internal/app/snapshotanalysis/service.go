@@ -84,7 +84,9 @@ func (s Service) sourceSnapshot(ctx context.Context, snapshot league.Snapshot) (
 		League: source.League{
 			ID: string(snapshot.League.ID), Name: snapshot.League.Name, SalaryCap: snapshot.League.SalaryCap,
 			ActiveRosterLimit: snapshot.League.ActiveRosterLimit, InjuredReserveLimit: snapshot.League.InjuredReserveLimit,
-			TaxiSquadLimit: snapshot.League.TaxiSquadLimit,
+			TaxiSquadLimit: snapshot.League.TaxiSquadLimit, WaiverType: snapshot.League.WaiverType,
+			BlindBidBudget: snapshot.League.BlindBidBudget, BlindBidBalance: snapshot.League.BlindBidBalance,
+			MinimumBid: snapshot.League.MinimumBid, BidIncrement: snapshot.League.BidIncrement,
 		},
 		Franchise:        source.Franchise{ID: string(snapshot.Franchise.ID), Name: snapshot.Franchise.Name},
 		BirthdatesUnix:   map[string]int64{},
@@ -93,6 +95,8 @@ func (s Service) sourceSnapshot(ctx context.Context, snapshot league.Snapshot) (
 			Source: snapshot.ReplacementLevels.Source, Method: snapshot.ReplacementLevels.Method,
 			MinimumHistoricalGames:  snapshot.ReplacementLevels.MinimumHistoricalGames,
 			PointsPerGameByPosition: cloneFloatMap(snapshot.ReplacementLevels.PointsPerGameByPosition),
+			CandidatesByPosition:    make(map[string][]source.ReplacementCandidate),
+			BidSource:               snapshot.ReplacementLevels.BidSource, BidMethod: snapshot.ReplacementLevels.BidMethod,
 		},
 		Projections: source.Projections{
 			Season: snapshot.Projections.Season, Source: snapshot.Projections.Source,
@@ -104,6 +108,20 @@ func (s Service) sourceSnapshot(ctx context.Context, snapshot league.Snapshot) (
 				Start: snapshot.DraftAvailabilityWindow.Start, End: snapshot.DraftAvailabilityWindow.End,
 			},
 		},
+	}
+	for position, candidates := range snapshot.ReplacementLevels.CandidatesByPosition {
+		for _, candidate := range candidates {
+			result.ReplacementLevels.CandidatesByPosition[position] = append(result.ReplacementLevels.CandidatesByPosition[position], source.ReplacementCandidate{
+				PlayerID: string(candidate.PlayerID), Name: candidate.Name, Position: candidate.Position, NFLTeam: candidate.NFLTeam,
+				RookieYear: candidate.RookieYear, AvailabilityStatus: candidate.AvailabilityStatus, ListedSalary: candidate.ListedSalary,
+				HistoricalPointsPerGame: candidate.HistoricalPointsPerGame, HistoricalGames: candidate.HistoricalGames,
+				EstimatedWinningBid: candidate.EstimatedWinningBid, BidLow: candidate.BidLow, BidHigh: candidate.BidHigh,
+				BidObservations: candidate.BidObservations, HistoricalWinningFranchises: candidate.HistoricalWinningFranchises,
+				BidConfidence: candidate.BidConfidence, Competition: candidate.Competition,
+				DynastyRank: candidate.DynastyRank, MarketValue: candidate.MarketValue,
+				ProjectedPoints: candidate.ProjectedPoints, Source: candidate.Source,
+			})
+		}
 	}
 	for _, assignment := range snapshot.Roster {
 		profile, err := s.Players.GetPlayer(ctx, assignment.PlayerID)

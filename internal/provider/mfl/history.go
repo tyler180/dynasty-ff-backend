@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
+	"strings"
 
 	source "github.com/tyler180/dynasty-ff-models/analysis"
 )
@@ -18,6 +20,7 @@ func loadMFLHistory(
 	leagueID string,
 	catalog map[string]catalogPlayer,
 	freeAgentsPayload map[string]any,
+	minimumBid float64,
 	warnings *[]string,
 ) (source.HistoricalPoints, source.ReplacementLevels) {
 	history := source.HistoricalPoints{
@@ -55,7 +58,16 @@ func loadMFLHistory(
 		}
 	}
 
-	replacement := replacementLevels(history, catalog, freeAgentIDs(freeAgentsPayload))
+	bids := make([]winningBid, 0)
+	for season := year - 1; season >= year-3; season-- {
+		var transactionsPayload map[string]any
+		if callOptional(ctx, caller, "get_transactions", map[string]any{
+			"year": season, "league_id": leagueID, "types": "WAIVER", "count": 2000,
+		}, &transactionsPayload, warnings) {
+			bids = append(bids, winningBids(transactionsPayload)...)
+		}
+	}
+	replacement := replacementLevels(history, catalog, freeAgentsPayload, bids, year, minimumBid)
 	return history, replacement
 }
 
@@ -91,22 +103,172 @@ type weightedPlayer struct {
 	Games int
 }
 
-func replacementLevels(history source.HistoricalPoints, catalog map[string]catalogPlayer, freeAgents map[string]bool) source.ReplacementLevels {
-	values := weightedHistory(history)
-	byPosition := make(map[string][]float64)
-	for id := range freeAgents {
-		metadata, exists := catalog[id]
-		value, scored := values[id]
-		if !exists || !scored || value.Games < minimumReplacementGames || metadata.Position == "" || metadata.NFLTeam == "" || metadata.NFLTeam == "FA" {
+type freeAgentRecord struct {
+	Status       string
+	ListedSalary float64
+}
+
+func freeAgentRecords(payload map[string]any) map[string]freeAgentRecord {
+	result := make(map[string]freeAgentRecord)
+	walkObjects(envelope(payload, "freeAgents"), func(item map[string]any) {
+		if id := textField(item, "id"); id != "" {
+			salary, _ := numberField(item, "salary")
+			result[id] = freeAgentRecord{Status: textField(item, "status"), ListedSalary: salary}
+		}
+	})
+	return result
+}
+
+type winningBid struct {
+	PlayerID  string
+	Franchise string
+	Amount    float64
+}
+
+func winningBids(payload map[string]any) []winningBid {
+	result := make([]winningBid, 0)
+	root := envelope(payload, "transactions")
+	for _, value := range values(root["transaction"]) {
+		transaction, ok := object(value)
+		if !ok || !strings.Contains(strings.ToUpper(textField(transaction, "type")), "WAIVER") {
 			continue
 		}
-		byPosition[metadata.Position] = append(byPosition[metadata.Position], value.PPG)
+		parts := strings.Split(textField(transaction, "transaction"), "|")
+		if len(parts) < 2 {
+			continue
+		}
+		playerID := strings.Trim(strings.TrimSpace(parts[0]), ",")
+		amount, err := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+		if playerID == "" || err != nil || amount < 0 {
+			continue
+		}
+		result = append(result, winningBid{PlayerID: playerID, Franchise: textField(transaction, "franchise"), Amount: amount})
+	}
+	return result
+}
+
+type bidEstimate struct {
+	Low, Expected, High     float64
+	Observations, Bidders   int
+	Confidence, Competition string
+}
+
+func bidEstimates(catalog map[string]catalogPlayer, bids []winningBid, minimumBid float64) map[string]bidEstimate {
+	byPosition := make(map[string][]winningBid)
+	for _, bid := range bids {
+		if position := catalog[bid.PlayerID].Position; position != "" {
+			byPosition[position] = append(byPosition[position], bid)
+		}
+	}
+	result := make(map[string]bidEstimate)
+	for position, observations := range byPosition {
+		amounts := make([]float64, 0, len(observations))
+		bidders := make(map[string]bool)
+		for _, observation := range observations {
+			amounts = append(amounts, math.Max(minimumBid, observation.Amount))
+			if observation.Franchise != "" {
+				bidders[observation.Franchise] = true
+			}
+		}
+		sort.Float64s(amounts)
+		estimate := bidEstimate{
+			Low: quantile(amounts, 0.50), Expected: quantile(amounts, 0.75), High: quantile(amounts, 0.90),
+			Observations: len(amounts), Bidders: len(bidders),
+		}
+		switch {
+		case estimate.Observations >= 30:
+			estimate.Confidence = "high"
+		case estimate.Observations >= 10:
+			estimate.Confidence = "medium"
+		default:
+			estimate.Confidence = "low"
+		}
+		switch {
+		case estimate.Expected >= 6:
+			estimate.Competition = "high"
+		case estimate.Expected >= 3:
+			estimate.Competition = "medium"
+		default:
+			estimate.Competition = "low"
+		}
+		result[position] = estimate
+	}
+	return result
+}
+
+func quantile(sorted []float64, fraction float64) float64 {
+	if len(sorted) == 0 {
+		return 0
+	}
+	index := int(math.Ceil(fraction*float64(len(sorted)))) - 1
+	if index < 0 {
+		index = 0
+	}
+	return round(sorted[index], 2)
+}
+
+func replacementLevels(history source.HistoricalPoints, catalog map[string]catalogPlayer, freeAgentsPayload map[string]any, bids []winningBid, year int, minimumBid float64) source.ReplacementLevels {
+	values := weightedHistory(history)
+	freeAgents := freeAgentRecords(freeAgentsPayload)
+	estimates := bidEstimates(catalog, bids, minimumBid)
+	byPosition := make(map[string][]source.ReplacementCandidate)
+	for id, freeAgent := range freeAgents {
+		metadata, exists := catalog[id]
+		if !exists || metadata.Position == "" || metadata.NFLTeam == "" || metadata.NFLTeam == "FA" {
+			continue
+		}
+		value := values[id]
+		estimate := estimates[metadata.Position]
+		if estimate.Observations == 0 {
+			estimate.Low, estimate.Expected, estimate.High = minimumBid, minimumBid, minimumBid
+			estimate.Confidence, estimate.Competition = "low", "unknown"
+		}
+		byPosition[metadata.Position] = append(byPosition[metadata.Position], source.ReplacementCandidate{
+			PlayerID: id, Name: metadata.Name, Position: metadata.Position, NFLTeam: metadata.NFLTeam,
+			RookieYear: metadata.RookieYear, AvailabilityStatus: freeAgent.Status, ListedSalary: freeAgent.ListedSalary,
+			HistoricalPointsPerGame: round(value.PPG, 2), HistoricalGames: value.Games,
+			EstimatedWinningBid: estimate.Expected, BidLow: estimate.Low, BidHigh: estimate.High,
+			BidObservations: estimate.Observations, HistoricalWinningFranchises: estimate.Bidders,
+			BidConfidence: estimate.Confidence, Competition: estimate.Competition,
+			Source: "Current MFL free-agent pool with historical MFL winning BBID estimate",
+		})
 	}
 	levels := make(map[string]float64)
 	for position, candidates := range byPosition {
-		sort.Sort(sort.Reverse(sort.Float64Slice(candidates)))
-		if len(candidates) >= 3 {
-			levels[position] = round(candidates[2], 2)
+		sort.SliceStable(candidates, func(i, j int) bool {
+			if candidates[i].HistoricalGames != candidates[j].HistoricalGames {
+				leftEligible := candidates[i].HistoricalGames >= minimumReplacementGames
+				rightEligible := candidates[j].HistoricalGames >= minimumReplacementGames
+				if leftEligible != rightEligible {
+					return leftEligible
+				}
+			}
+			if candidates[i].HistoricalPointsPerGame != candidates[j].HistoricalPointsPerGame {
+				return candidates[i].HistoricalPointsPerGame > candidates[j].HistoricalPointsPerGame
+			}
+			return candidates[i].Name < candidates[j].Name
+		})
+		eligible := make([]source.ReplacementCandidate, 0, len(candidates))
+		selected := make([]source.ReplacementCandidate, 0, 20)
+		for _, candidate := range candidates {
+			if candidate.HistoricalGames >= minimumReplacementGames {
+				eligible = append(eligible, candidate)
+				if len(selected) < 10 {
+					selected = append(selected, candidate)
+				}
+			}
+		}
+		for _, candidate := range candidates {
+			if len(selected) >= 20 {
+				break
+			}
+			if candidate.HistoricalGames < minimumReplacementGames && (candidate.HistoricalGames > 0 || candidate.RookieYear >= year-2) {
+				selected = append(selected, candidate)
+			}
+		}
+		byPosition[position] = selected
+		if len(eligible) >= 3 {
+			levels[position] = round(eligible[2].HistoricalPointsPerGame, 2)
 		}
 	}
 	return source.ReplacementLevels{
@@ -114,6 +276,9 @@ func replacementLevels(history source.HistoricalPoints, catalog map[string]catal
 		Method:                  "Third-highest recency-weighted PPG by exact position",
 		MinimumHistoricalGames:  minimumReplacementGames,
 		PointsPerGameByPosition: levels,
+		CandidatesByPosition:    byPosition,
+		BidSource:               "Winning BBID_WAIVER transactions from the prior three MFL seasons",
+		BidMethod:               "Median/P75/P90 winning bid by exact position; expected acquisition salary uses P75",
 	}
 }
 

@@ -54,6 +54,9 @@ func TestSyncRefreshesMFLFieldsAndPreservesLeagueSpecificInputs(t *testing.T) {
 	if snapshot.SnapshotDate != "2026-08-09" || snapshot.League.Name != "Fresh League Name" || snapshot.Franchise.Name != "Team McLean Live" {
 		t.Fatalf("identity fields were not refreshed: %+v %+v", snapshot.League, snapshot.Franchise)
 	}
+	if snapshot.League.WaiverType != "BBID" || snapshot.League.BlindBidBudget != 100 || snapshot.League.BlindBidBalance != 55 || snapshot.League.MinimumBid != 1 || snapshot.League.BidIncrement != 1 {
+		t.Fatalf("waiver settings were not refreshed: %+v", snapshot.League)
+	}
 	if len(snapshot.Roster) != 3 {
 		t.Fatalf("roster length = %d, want 3", len(snapshot.Roster))
 	}
@@ -218,8 +221,9 @@ func TestLoadProjectionsSupportsBareMap(t *testing.T) {
 
 func fixtureCaller() *fakeCaller {
 	return &fakeCaller{responses: map[string]any{
-		"get_rules":     map[string]any{"rules": map[string]any{"positionRules": map[string]any{}}},
-		"get_all_rules": map[string]any{"allRules": map[string]any{"rule": []any{}}},
+		"get_rules":        map[string]any{"rules": map[string]any{"positionRules": map[string]any{}}},
+		"get_all_rules":    map[string]any{"allRules": map[string]any{"rule": []any{}}},
+		"get_transactions": map[string]any{"transactions": map[string]any{"transaction": []any{}}},
 		"get_player_scores": map[string]any{"playerScores": map[string]any{"playerScore": []any{
 			map[string]any{"id": "15751", "score": "160"},
 			map[string]any{"id": "15418", "score": "120"},
@@ -227,8 +231,9 @@ func fixtureCaller() *fakeCaller {
 		}}},
 		"get_league": map[string]any{"league": map[string]any{
 			"id": "79286", "name": "Fresh League Name", "salaryCapAmount": "250", "rosterSize": "26", "injuredReserve": "3", "taxiSquad": "4",
+			"currentWaiverType": "BBID", "bbidSeasonLimit": "100", "minBid": "1", "bbidIncrement": "1",
 			"franchises": map[string]any{"count": "12", "franchise": []any{
-				map[string]any{"id": "0005", "name": "Team McLean Live"},
+				map[string]any{"id": "0005", "name": "Team McLean Live", "bbidAvailableBalance": "55"},
 				map[string]any{"id": "0002", "name": "Other Team"},
 			}},
 		}},

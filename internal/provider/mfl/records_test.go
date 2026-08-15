@@ -38,14 +38,23 @@ func TestNormalizeRecordsResolvesMFLIDsBeforeBuildingLeagueFacts(t *testing.T) {
 		HistoricalPoints: source.HistoricalPoints{Source: "MFL", Seasons: []source.HistoricalSeason{{
 			Season: 2025, ByPlayerID: map[string]float64{"15751": 170}, GamesPlayedByPlayerID: map[string]int{"15751": 17},
 		}}},
-		ReplacementLevels: source.ReplacementLevels{Source: "MFL free agents", PointsPerGameByPosition: map[string]float64{"WR": 8}},
-		Projections:       source.Projections{Season: 2026, Source: "test", ByPlayerID: map[string]float64{"15751": 220}},
+		ReplacementLevels: source.ReplacementLevels{
+			Source: "MFL free agents", PointsPerGameByPosition: map[string]float64{"WR": 8},
+			CandidatesByPosition: map[string][]source.ReplacementCandidate{"WR": {{
+				PlayerID: "16000", Name: "Replacement", Position: "WR", NFLTeam: "BUF",
+				HistoricalPointsPerGame: 9, HistoricalGames: 30, EstimatedWinningBid: 3,
+			}}},
+		},
+		Projections: source.Projections{Season: 2026, Source: "test", ByPlayerID: map[string]float64{"15751": 220}},
 		Draft: source.Draft{
 			Status: "scheduled", AvailabilityPollWindow: source.AvailabilityPollWindow{Start: "2026-08-20", End: "2026-08-21"},
 			CurrentYearPicks: []source.Pick{{Pick: "1.06", Overall: 6, Salary: 15}},
 		},
 	}
-	resolver := mapPlayerResolver{"15751": {ID: player.ID("player-123"), DisplayName: "Drake London"}}
+	resolver := mapPlayerResolver{
+		"15751": {ID: player.ID("player-123"), DisplayName: "Drake London"},
+		"16000": {ID: player.ID("player-replacement"), DisplayName: "Replacement"},
+	}
 
 	records, err := NormalizeRecords(context.Background(), snapshot, resolver, observedAt)
 	if err != nil {
@@ -62,6 +71,9 @@ func TestNormalizeRecordsResolvesMFLIDsBeforeBuildingLeagueFacts(t *testing.T) {
 	}
 	if assignment := records.LeagueSnapshot.Roster[0]; assignment.DynastyRank != 12 || assignment.MarketValue != 8000 || assignment.MarketSource != "FantasyPros" {
 		t.Fatalf("roster market facts = %+v", assignment)
+	}
+	if candidate := records.LeagueSnapshot.ReplacementLevels.CandidatesByPosition["WR"][0]; candidate.PlayerID != "player-replacement" || candidate.EstimatedWinningBid != 3 {
+		t.Fatalf("replacement candidate = %+v", candidate)
 	}
 	if records.Players[0].BirthDate == nil || records.Players[0].RookieYear != 2022 {
 		t.Fatalf("legacy profile enrichment was not preserved: %+v", records.Players[0])

@@ -177,6 +177,13 @@ draft-pick fit, taxi eligibility, and replacement-aware drop classifications.
 FantasyPros dynasty rank and its transparent rank-derived market value are also
 persisted for rostered players. Drop analysis uses them to protect tradeable
 assets and can recommend a multi-player cut package that meets the cap target.
+Replacement options are specific players in the current MFL free-agent pool.
+The sync reads the prior three seasons of successful blind-bid waivers and uses
+the position-level median, 75th percentile, and 90th percentile winning bids to
+report an estimated acquisition salary, competition, and confidence. Each option
+shows gross and net cap relief, roster impact, BBID-budget fit, and current MFL
+lock status. Pending and losing bids are not exposed by MFL and remain explicitly
+outside the model.
 The response contains separate offense and IDP rookie boards built only from
 players currently in MFL's free-agent rookie pool. Official FantasyPros
 rookie/dynasty ECR and preseason PPR projections provide the top-of-board signal.

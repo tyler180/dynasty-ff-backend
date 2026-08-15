@@ -168,6 +168,24 @@ func enrichEvaluations(
 		candidate.Source = appendObservationSource(candidate.Source, sourceName)
 		candidate.UpdatedAt = observedAt.UTC().Format(time.RFC3339)
 	}
+	for position, candidates := range snapshot.ReplacementLevels.CandidatesByPosition {
+		for index := range candidates {
+			candidate := &candidates[index]
+			profile, err := identities.ResolvePlayer(ctx, player.ExternalID{Provider: player.ProviderMFL, Value: candidate.PlayerID})
+			if err != nil {
+				return nil, fmt.Errorf("resolve replacement candidate MFL player %s: %w", candidate.PlayerID, err)
+			}
+			value, found := byCanonicalID[profile.ID]
+			if !found {
+				continue
+			}
+			candidate.DynastyRank = value.DynastyRank
+			candidate.MarketValue = value.MarketValue
+			candidate.ProjectedPoints = value.ProjectedPoints
+			candidate.Source = appendObservationSource(candidate.Source, sourceName)
+		}
+		snapshot.ReplacementLevels.CandidatesByPosition[position] = candidates
+	}
 	if snapshot.Projections.ByPlayerID == nil {
 		snapshot.Projections.ByPlayerID = map[string]float64{}
 	}

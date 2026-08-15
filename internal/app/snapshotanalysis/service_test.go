@@ -36,6 +36,7 @@ func TestAnalyzeLatestNormalizedSnapshot(t *testing.T) {
 			League: league.League{
 				ID: "79286", Name: "League", Season: 2026, SalaryCap: 250,
 				ActiveRosterLimit: 26, InjuredReserveLimit: 3, TaxiSquadLimit: 4,
+				WaiverType: "BBID", BlindBidBudget: 100, BlindBidBalance: 100, MinimumBid: 1,
 			},
 			Franchise: league.Franchise{ID: "0005", Name: "Team McLean"},
 			Roster: []league.RosterAssignment{{
@@ -48,7 +49,11 @@ func TestAnalyzeLatestNormalizedSnapshot(t *testing.T) {
 				GamesPlayedByPlayerID: map[string]int{string(playerID): 17},
 			}}},
 			ReplacementLevels: league.ReplacementLevels{
-				Source: "MFL free agents", PointsPerGameByPosition: map[string]float64{"WR": 8},
+				Source: "MFL free agents", MinimumHistoricalGames: 8, PointsPerGameByPosition: map[string]float64{"WR": 8},
+				CandidatesByPosition: map[string][]league.ReplacementCandidate{"WR": {{
+					PlayerID: "replacement", Name: "Replacement", Position: "WR", NFLTeam: "BUF",
+					HistoricalPointsPerGame: 9, HistoricalGames: 30, EstimatedWinningBid: 3,
+				}}},
 			},
 			ObservedAt: observedAt, Source: "mfl",
 		}},
@@ -77,6 +82,9 @@ func TestAnalyzeLatestNormalizedSnapshot(t *testing.T) {
 	}
 	if got := result.Analysis.DropEvaluation.Candidates[0]; got.DynastyRank != 12 || got.MarketValue != 8000 || got.Disposition != "trade_first" {
 		t.Fatalf("market-aware drop candidate = %+v", got)
+	}
+	if got := result.Analysis.DropEvaluation.Candidates[0].ReplacementOptions[0]; got.PlayerID != "replacement" || got.EstimatedAcquisitionSalary != 3 {
+		t.Fatalf("replacement option = %+v", got)
 	}
 }
 
