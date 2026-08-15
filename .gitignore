@@ -3,3 +3,4 @@
 *.tfstate.*
 .terraform/
 analyze-results.json
+analyze-results-*.json
