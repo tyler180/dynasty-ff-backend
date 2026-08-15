@@ -89,4 +89,7 @@ func TestEnrichEvaluationsJoinsThroughCanonicalIdentities(t *testing.T) {
 	if got := snapshot.Projections.ByPlayerID["15751"]; got != 250 {
 		t.Fatalf("veteran projection = %v", got)
 	}
+	if got := snapshot.Roster[0]; got.DynastyRank != 5 || got.MarketValue != 9000 || got.MarketSource == "" {
+		t.Fatalf("veteran market evaluation = %+v", got)
+	}
 }

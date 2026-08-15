@@ -174,6 +174,9 @@ persisted MFL league-scored history unless explicit projections cover the full
 roster, preventing a partial provider response from silently excluding players. The
 response includes the exact snapshot timestamp used, cap and roster compliance,
 draft-pick fit, taxi eligibility, and replacement-aware drop classifications.
+FantasyPros dynasty rank and its transparent rank-derived market value are also
+persisted for rostered players. Drop analysis uses them to protect tradeable
+assets and can recommend a multi-player cut package that meets the cap target.
 The response contains separate offense and IDP rookie boards built only from
 players currently in MFL's free-agent rookie pool. Official FantasyPros
 rookie/dynasty ECR and preseason PPR projections provide the top-of-board signal.

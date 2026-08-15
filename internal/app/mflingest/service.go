@@ -171,13 +171,19 @@ func enrichEvaluations(
 	if snapshot.Projections.ByPlayerID == nil {
 		snapshot.Projections.ByPlayerID = map[string]float64{}
 	}
-	for _, rostered := range snapshot.Roster {
+	for index := range snapshot.Roster {
+		rostered := &snapshot.Roster[index]
 		profile, err := identities.ResolvePlayer(ctx, player.ExternalID{Provider: player.ProviderMFL, Value: rostered.ID})
 		if err != nil {
 			return nil, fmt.Errorf("resolve roster projection MFL player %s: %w", rostered.ID, err)
 		}
-		if value, found := byCanonicalID[profile.ID]; found && value.ProjectedPoints > 0 {
-			snapshot.Projections.ByPlayerID[rostered.ID] = value.ProjectedPoints
+		if value, found := byCanonicalID[profile.ID]; found {
+			rostered.DynastyRank = value.DynastyRank
+			rostered.MarketValue = value.MarketValue
+			rostered.MarketSource = sourceName
+			if value.ProjectedPoints > 0 {
+				snapshot.Projections.ByPlayerID[rostered.ID] = value.ProjectedPoints
+			}
 		}
 	}
 	if len(snapshot.Projections.ByPlayerID) > 0 {

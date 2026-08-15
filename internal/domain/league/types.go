@@ -60,6 +60,9 @@ type RosterAssignment struct {
 	Salary          float64      `json:"salary"`
 	CurrentCapHit   float64      `json:"current_cap_hit"`
 	ContractThrough int          `json:"contract_through,omitempty"`
+	DynastyRank     float64      `json:"dynasty_rank,omitempty"`
+	MarketValue     float64      `json:"market_value,omitempty"`
+	MarketSource    string       `json:"market_source,omitempty"`
 }
 
 type AvailabilityWindow struct {

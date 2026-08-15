@@ -109,6 +109,7 @@ func NormalizeRecords(ctx context.Context, snapshot source.Snapshot, resolver Pl
 			NFLTeam:       rostered.NFLTeam,
 			Salary:        rostered.Salary,
 			CurrentCapHit: rostered.CurrentCapHit,
+			DynastyRank:   rostered.DynastyRank, MarketValue: rostered.MarketValue, MarketSource: rostered.MarketSource,
 		})
 	}
 	records.LeagueSnapshot.HistoricalPoints = normalizeHistoricalPoints(snapshot.HistoricalPoints, canonicalByMFLID)

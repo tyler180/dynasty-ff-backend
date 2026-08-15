@@ -40,7 +40,7 @@ func TestAnalyzeLatestNormalizedSnapshot(t *testing.T) {
 			Franchise: league.Franchise{ID: "0005", Name: "Team McLean"},
 			Roster: []league.RosterAssignment{{
 				PlayerID: playerID, Status: league.RosterActive, Position: "WR", NFLTeam: "ATL",
-				Salary: 20, CurrentCapHit: 20,
+				Salary: 20, CurrentCapHit: 20, DynastyRank: 12, MarketValue: 8000, MarketSource: "FantasyPros",
 			}},
 			DraftAssets: []league.DraftAsset{{Season: 2026, Round: 1, Pick: 6, Overall: 6, Salary: 15}},
 			HistoricalPoints: league.HistoricalPoints{Source: "MFL", Seasons: []league.HistoricalSeason{{
@@ -74,6 +74,9 @@ func TestAnalyzeLatestNormalizedSnapshot(t *testing.T) {
 	}
 	if got := result.Analysis.DropEvaluation.Candidates[0].Name; got != "Drake London" {
 		t.Fatalf("candidate name = %q", got)
+	}
+	if got := result.Analysis.DropEvaluation.Candidates[0]; got.DynastyRank != 12 || got.MarketValue != 8000 || got.Disposition != "trade_first" {
+		t.Fatalf("market-aware drop candidate = %+v", got)
 	}
 }
 

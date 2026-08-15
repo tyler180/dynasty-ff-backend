@@ -114,6 +114,7 @@ func (s Service) sourceSnapshot(ctx context.Context, snapshot league.Snapshot) (
 			ID: string(assignment.PlayerID), Name: profile.DisplayName, Position: assignment.Position,
 			NFLTeam: assignment.NFLTeam, Salary: assignment.Salary, Status: sourceRosterStatus(assignment.Status),
 			CurrentCapHit: assignment.CurrentCapHit, RookieYear: profile.RookieYear,
+			DynastyRank: assignment.DynastyRank, MarketValue: assignment.MarketValue, MarketSource: assignment.MarketSource,
 		})
 		if profile.BirthDate != nil {
 			result.BirthdatesUnix[string(assignment.PlayerID)] = profile.BirthDate.Unix()

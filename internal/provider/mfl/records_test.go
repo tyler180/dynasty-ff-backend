@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	source "github.com/tyler180/dynasty-ff-models/analysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
+	source "github.com/tyler180/dynasty-ff-models/analysis"
 )
 
 type mapPlayerResolver map[string]player.Profile
@@ -32,6 +32,7 @@ func TestNormalizeRecordsResolvesMFLIDsBeforeBuildingLeagueFacts(t *testing.T) {
 		Roster: []source.Player{{
 			ID: "15751", Name: "Drake London", Position: "WR", NFLTeam: "ATL",
 			Salary: 10, CurrentCapHit: 10, Status: "ROSTER", RookieYear: 2022,
+			DynastyRank: 12, MarketValue: 8000, MarketSource: "FantasyPros",
 		}},
 		BirthdatesUnix: map[string]int64{"15751": time.Date(2001, 7, 24, 0, 0, 0, 0, time.UTC).Unix()},
 		HistoricalPoints: source.HistoricalPoints{Source: "MFL", Seasons: []source.HistoricalSeason{{
@@ -58,6 +59,9 @@ func TestNormalizeRecordsResolvesMFLIDsBeforeBuildingLeagueFacts(t *testing.T) {
 	}
 	if assignment := records.LeagueSnapshot.Roster[0]; assignment.Position != "WR" || assignment.NFLTeam != "ATL" {
 		t.Fatalf("roster facts = %+v", assignment)
+	}
+	if assignment := records.LeagueSnapshot.Roster[0]; assignment.DynastyRank != 12 || assignment.MarketValue != 8000 || assignment.MarketSource != "FantasyPros" {
+		t.Fatalf("roster market facts = %+v", assignment)
 	}
 	if records.Players[0].BirthDate == nil || records.Players[0].RookieYear != 2022 {
 		t.Fatalf("legacy profile enrichment was not preserved: %+v", records.Players[0])
