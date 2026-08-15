@@ -64,7 +64,14 @@ func (c *Client) Evaluations(ctx context.Context, season int) ([]Evaluation, err
 	}
 	values := make(map[string]*Evaluation)
 	for _, rankingType := range []string{"ROOKIES", "DYNASTY"} {
-		for _, position := range []string{"ALL", "IDP"} {
+		positions := []string{"ALL", "IDP"}
+		if rankingType == "DYNASTY" {
+			// Lower API tiers can truncate an overall board before strong
+			// position-specific players appear. Positional boards recover those
+			// players while ALL/IDP ranks remain preferred when available.
+			positions = append(positions, "QB", "RB", "WR", "TE", "DL", "LB", "DB")
+		}
+		for _, position := range positions {
 			payload, err := c.get(ctx, apiKey, fmt.Sprintf("nfl/%d/consensus-rankings", season), url.Values{
 				"position": {position}, "type": {rankingType}, "scoring": {"PPR"}, "include_idp": {"true"},
 			})
@@ -84,7 +91,7 @@ func (c *Client) Evaluations(ctx context.Context, season int) ([]Evaluation, err
 				item.mergeIdentity(ranked.Name, ranked.Position, ranked.Team)
 				if rankingType == "ROOKIES" {
 					item.RookieRank = ranked.Rank.Float64()
-				} else {
+				} else if item.DynastyRank == 0 {
 					item.DynastyRank = ranked.Rank.Float64()
 				}
 			}
@@ -186,14 +193,12 @@ type rankingPlayer struct {
 }
 
 func (p rankingPlayer) id() string {
-	// FantasyPros exposes its stable cross-provider identifier as fpid. The
-	// player_id field in ranking responses is a different namespace and can
-	// numerically collide with another player's fpid, so only use it when fpid
-	// is absent.
-	if p.FPID.String() != "" {
-		return p.FPID.String()
+	// The consensus-ranking API documents player_id as the FantasyPros player
+	// ID. Some payload variants also expose fpid, so retain it as a fallback.
+	if p.PlayerID.String() != "" {
+		return p.PlayerID.String()
 	}
-	return p.PlayerID.String()
+	return p.FPID.String()
 }
 
 type projectionResponse struct {
