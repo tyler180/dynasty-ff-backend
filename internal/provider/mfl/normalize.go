@@ -100,6 +100,16 @@ func normalizeLeague(payload map[string]any, fallback source.League, franchiseID
 	if value, ok := numberField(root, "salaryCapAmount", "salary_cap", "salaryCap"); ok && value > 0 {
 		league.SalaryCap = value
 	}
+	league.WaiverType = textField(root, "currentWaiverType", "waiverType")
+	if value, ok := numberField(root, "bbidSeasonLimit", "blindBidBudget"); ok {
+		league.BlindBidBudget = value
+	}
+	if value, ok := numberField(root, "minBid", "minimumBid"); ok {
+		league.MinimumBid = value
+	}
+	if value, ok := numberField(root, "bbidIncrement", "bidIncrement"); ok {
+		league.BidIncrement = value
+	}
 	if value := intField(root, "rosterSize", "activeRosterLimit", "active_roster_limit"); value > 0 {
 		league.ActiveRosterLimit = value
 	}
@@ -115,6 +125,9 @@ func normalizeLeague(payload map[string]any, fallback source.League, franchiseID
 			franchise, ok := object(item)
 			if ok && textField(franchise, "id") == franchiseID {
 				franchiseName = textField(franchise, "name")
+				if value, ok := numberField(franchise, "bbidAvailableBalance"); ok {
+					league.BlindBidBalance = value
+				}
 				break
 			}
 		}

@@ -45,6 +45,11 @@ type League struct {
 	ActiveRosterLimit   int     `json:"active_roster_limit"`
 	InjuredReserveLimit int     `json:"injured_reserve_limit"`
 	TaxiSquadLimit      int     `json:"taxi_squad_limit"`
+	WaiverType          string  `json:"waiver_type,omitempty"`
+	BlindBidBudget      float64 `json:"blind_bid_budget,omitempty"`
+	BlindBidBalance     float64 `json:"blind_bid_balance,omitempty"`
+	MinimumBid          float64 `json:"minimum_bid,omitempty"`
+	BidIncrement        float64 `json:"bid_increment,omitempty"`
 }
 
 type Franchise struct {
@@ -82,10 +87,36 @@ type HistoricalSeason struct {
 }
 
 type ReplacementLevels struct {
-	Source                  string             `json:"source,omitempty"`
-	Method                  string             `json:"method,omitempty"`
-	MinimumHistoricalGames  int                `json:"minimum_historical_games,omitempty"`
-	PointsPerGameByPosition map[string]float64 `json:"points_per_game_by_position,omitempty"`
+	Source                  string                            `json:"source,omitempty"`
+	Method                  string                            `json:"method,omitempty"`
+	MinimumHistoricalGames  int                               `json:"minimum_historical_games,omitempty"`
+	PointsPerGameByPosition map[string]float64                `json:"points_per_game_by_position,omitempty"`
+	CandidatesByPosition    map[string][]ReplacementCandidate `json:"candidates_by_position,omitempty"`
+	BidSource               string                            `json:"bid_source,omitempty"`
+	BidMethod               string                            `json:"bid_method,omitempty"`
+}
+
+type ReplacementCandidate struct {
+	PlayerID                    player.ID `json:"player_id"`
+	Name                        string    `json:"name"`
+	Position                    string    `json:"position"`
+	NFLTeam                     string    `json:"nfl_team,omitempty"`
+	RookieYear                  int       `json:"rookie_year,omitempty"`
+	AvailabilityStatus          string    `json:"availability_status,omitempty"`
+	ListedSalary                float64   `json:"listed_salary,omitempty"`
+	HistoricalPointsPerGame     float64   `json:"historical_points_per_game,omitempty"`
+	HistoricalGames             int       `json:"historical_games,omitempty"`
+	EstimatedWinningBid         float64   `json:"estimated_winning_bid,omitempty"`
+	BidLow                      float64   `json:"bid_low,omitempty"`
+	BidHigh                     float64   `json:"bid_high,omitempty"`
+	BidObservations             int       `json:"bid_observations,omitempty"`
+	HistoricalWinningFranchises int       `json:"historical_winning_franchises,omitempty"`
+	BidConfidence               string    `json:"bid_confidence,omitempty"`
+	Competition                 string    `json:"competition,omitempty"`
+	DynastyRank                 float64   `json:"dynasty_rank,omitempty"`
+	MarketValue                 float64   `json:"market_value,omitempty"`
+	ProjectedPoints             float64   `json:"projected_points,omitempty"`
+	Source                      string    `json:"source,omitempty"`
 }
 
 type Projections struct {

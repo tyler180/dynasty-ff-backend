@@ -122,7 +122,7 @@ func Sync(ctx context.Context, caller Caller, base BaseDocument, options Options
 	var freeAgentsPayload map[string]any
 	haveFreeAgents := callOptional(ctx, caller, "get_free_agents", common, &freeAgentsPayload, &warnings)
 	if len(snapshot.HistoricalPoints.Seasons) == 0 && len(snapshot.HistoricalPoints.ByPlayerID) == 0 {
-		history, replacement := loadMFLHistory(ctx, caller, options.Year, options.LeagueID, catalog, freeAgentsPayload, &warnings)
+		history, replacement := loadMFLHistory(ctx, caller, options.Year, options.LeagueID, catalog, freeAgentsPayload, snapshot.League.MinimumBid, &warnings)
 		if len(history.Seasons) > 0 {
 			snapshot.HistoricalPoints = history
 			snapshot.ReplacementLevels = replacement

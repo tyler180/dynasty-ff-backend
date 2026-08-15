@@ -22,13 +22,40 @@ func TestPlayerScoresAndReplacementLevels(t *testing.T) {
 		GamesPlayedByPlayerID: map[string]int{"a": 16, "b": 16, "c": 16},
 	}}}
 	catalog := map[string]catalogPlayer{
-		"a": {ID: "a", Position: "WR", NFLTeam: "ATL"},
-		"b": {ID: "b", Position: "WR", NFLTeam: "BUF"},
-		"c": {ID: "c", Position: "WR", NFLTeam: "CHI"},
+		"a": {ID: "a", Name: "A", Position: "WR", NFLTeam: "ATL"},
+		"b": {ID: "b", Name: "B", Position: "WR", NFLTeam: "BUF"},
+		"c": {ID: "c", Name: "C", Position: "WR", NFLTeam: "CHI"},
 	}
-	levels := replacementLevels(history, catalog, map[string]bool{"a": true, "b": true, "c": true})
+	freeAgents := map[string]any{"freeAgents": map[string]any{"player": []any{
+		map[string]any{"id": "a", "status": "free_agent"},
+		map[string]any{"id": "b", "status": "locked"},
+		map[string]any{"id": "c", "status": "free_agent"},
+	}}}
+	bids := []winningBid{
+		{PlayerID: "a", Franchise: "0001", Amount: 1},
+		{PlayerID: "b", Franchise: "0002", Amount: 3},
+		{PlayerID: "c", Franchise: "0003", Amount: 7},
+	}
+	levels := replacementLevels(history, catalog, freeAgents, bids, 2026, 1)
 	if levels.PointsPerGameByPosition["WR"] != 8 {
 		t.Fatalf("WR replacement = %.2f, want 8", levels.PointsPerGameByPosition["WR"])
+	}
+	if candidates := levels.CandidatesByPosition["WR"]; len(candidates) != 3 || candidates[0].PlayerID != "a" || candidates[1].AvailabilityStatus != "locked" {
+		t.Fatalf("WR replacement candidates = %+v", candidates)
+	}
+	if candidate := levels.CandidatesByPosition["WR"][0]; candidate.EstimatedWinningBid != 7 || candidate.BidLow != 3 || candidate.BidHigh != 7 || candidate.BidObservations != 3 {
+		t.Fatalf("WR bid estimate = %+v", candidate)
+	}
+}
+
+func TestWinningBidsParsesBBIDTransactions(t *testing.T) {
+	payload := map[string]any{"transactions": map[string]any{"transaction": []any{
+		map[string]any{"type": "BBID_WAIVER", "franchise": "0005", "transaction": "17039,|3.00|16586,"},
+		map[string]any{"type": "FREE_AGENT", "franchise": "0005", "transaction": "|17039,"},
+	}}}
+	bids := winningBids(payload)
+	if len(bids) != 1 || bids[0].PlayerID != "17039" || bids[0].Amount != 3 || bids[0].Franchise != "0005" {
+		t.Fatalf("winning bids = %+v", bids)
 	}
 }
 

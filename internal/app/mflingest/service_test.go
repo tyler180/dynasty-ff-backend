@@ -57,18 +57,24 @@ func (f fakeIdentities) ResolvePlayers(_ context.Context, ids []player.ExternalI
 func TestEnrichEvaluationsJoinsThroughCanonicalIdentities(t *testing.T) {
 	rookieID := player.ID("rookie-canonical")
 	veteranID := player.ID("veteran-canonical")
+	replacementID := player.ID("replacement-canonical")
 	identities := fakeIdentities{
 		byMFL: map[string]player.Profile{
 			"17000": {ID: rookieID, DisplayName: "Rookie"},
 			"15751": {ID: veteranID, DisplayName: "Veteran"},
+			"16000": {ID: replacementID, DisplayName: "Replacement"},
 		},
 		byFP: map[string]player.Profile{
 			"28000": {ID: rookieID, DisplayName: "Rookie"},
 			"19788": {ID: veteranID, DisplayName: "Veteran"},
+			"29000": {ID: replacementID, DisplayName: "Replacement"},
 		},
 	}
 	snapshot := source.Snapshot{
 		Roster: []source.Player{{ID: "15751", Name: "Veteran"}},
+		ReplacementLevels: source.ReplacementLevels{CandidatesByPosition: map[string][]source.ReplacementCandidate{
+			"WR": {{PlayerID: "16000", Name: "Replacement", Position: "WR"}},
+		}},
 		RookieCandidates: []source.RookieCandidate{{
 			ID: "17000", Name: "Rookie", Position: "WR", RookieYear: 2026, RookieADP: 25.5, Source: "MFL rookie-only ADP",
 		}},
@@ -76,6 +82,7 @@ func TestEnrichEvaluationsJoinsThroughCanonicalIdentities(t *testing.T) {
 	warnings, err := enrichEvaluations(context.Background(), &snapshot, 2026, time.Date(2026, 8, 13, 0, 0, 0, 0, time.UTC), identities, fakeEvaluations{
 		{FantasyProsID: "28000", RookieRank: 2, DynastyRank: 50, MarketValue: 4000, ProjectedPoints: 120},
 		{FantasyProsID: "19788", DynastyRank: 5, MarketValue: 9000, ProjectedPoints: 250},
+		{FantasyProsID: "29000", DynastyRank: 105, MarketValue: 900, ProjectedPoints: 110},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -91,5 +98,8 @@ func TestEnrichEvaluationsJoinsThroughCanonicalIdentities(t *testing.T) {
 	}
 	if got := snapshot.Roster[0]; got.DynastyRank != 5 || got.MarketValue != 9000 || got.MarketSource == "" {
 		t.Fatalf("veteran market evaluation = %+v", got)
+	}
+	if got := snapshot.ReplacementLevels.CandidatesByPosition["WR"][0]; got.DynastyRank != 105 || got.MarketValue != 900 || got.ProjectedPoints != 110 || !strings.Contains(got.Source, "FantasyPros") {
+		t.Fatalf("replacement market evaluation = %+v", got)
 	}
 }
