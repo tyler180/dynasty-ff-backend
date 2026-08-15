@@ -22,6 +22,33 @@ func TestServiceRejectsIncompleteConfiguration(t *testing.T) {
 	}
 }
 
+func TestEnrichEvaluationsWarnsWhenRosterMarketCoverageIsIncomplete(t *testing.T) {
+	valuedID := player.ID("valued-canonical")
+	missingID := player.ID("missing-canonical")
+	identities := fakeIdentities{
+		byMFL: map[string]player.Profile{
+			"15751": {ID: valuedID, DisplayName: "Valued"},
+			"99999": {ID: missingID, DisplayName: "Missing"},
+		},
+		byFP: map[string]player.Profile{
+			"19788": {ID: valuedID, DisplayName: "Valued"},
+		},
+	}
+	snapshot := source.Snapshot{Roster: []source.Player{
+		{ID: "15751", Name: "Valued"},
+		{ID: "99999", Name: "Missing"},
+	}}
+	warnings, err := enrichEvaluations(context.Background(), &snapshot, 2026, time.Now(), identities, fakeEvaluations{
+		{FantasyProsID: "19788", DynastyRank: 5, MarketValue: 9000},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "valued 1 of 2 rostered players") {
+		t.Fatalf("warnings = %v", warnings)
+	}
+}
+
 type fakeEvaluations []fantasypros.Evaluation
 
 func (f fakeEvaluations) Evaluations(context.Context, int) ([]fantasypros.Evaluation, error) {

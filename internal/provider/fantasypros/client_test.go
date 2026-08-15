@@ -26,9 +26,9 @@ func TestClientCombinesRankingsAndProjections(t *testing.T) {
 		body := `{"players":[]}`
 		switch request.URL.Query().Get("type") {
 		case "ROOKIES":
-			body = `{"players":[{"player_id":28138,"player_name":"Rookie WR","player_position_id":"WR","player_team_id":"SF","rank_ecr":2.5}]}`
+			body = `{"players":[{"player_id":99901,"fpid":28138,"player_name":"Rookie WR","player_position_id":"WR","player_team_id":"SF","rank_ecr":2.5}]}`
 		case "DYNASTY":
-			body = `{"players":[{"player_id":"28138","player_name":"Rookie WR","player_position_id":"WR","player_team_id":"SF","rank_ecr":"80"}]}`
+			body = `{"players":[{"player_id":"99901","fpid":"28138","player_name":"Rookie WR","player_position_id":"WR","player_team_id":"SF","rank_ecr":"80"}]}`
 		default:
 			body = `{"players":[{"fpid":28138,"name":"Rookie WR","position_id":"WR","team_id":"SF","stats":[{"points":120,"points_ppr":150.5}]}]}`
 		}

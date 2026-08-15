@@ -208,6 +208,7 @@ func enrichEvaluations(
 		snapshot.Projections.Season = season
 		snapshot.Projections.Source = sourceName
 	}
+	warnings := make([]string, 0, 2)
 	valued := 0
 	for _, candidate := range snapshot.RookieCandidates {
 		if candidate.MarketValue > 0 || candidate.RookieRank > 0 || candidate.RookieADP > 0 || candidate.ProjectedPoints[season] > 0 {
@@ -215,9 +216,18 @@ func enrichEvaluations(
 		}
 	}
 	if valued < len(snapshot.RookieCandidates) {
-		return []string{fmt.Sprintf("MFL rookie ADP and FantasyPros valued %d of %d currently available MFL rookies; unranked players remain visible but are not ranked", valued, len(snapshot.RookieCandidates))}, nil
+		warnings = append(warnings, fmt.Sprintf("MFL rookie ADP and FantasyPros valued %d of %d currently available MFL rookies; unranked players remain visible but are not ranked", valued, len(snapshot.RookieCandidates)))
 	}
-	return nil, nil
+	rosterValued := 0
+	for _, rostered := range snapshot.Roster {
+		if rostered.MarketValue > 0 || rostered.DynastyRank > 0 || snapshot.Projections.ByPlayerID[rostered.ID] > 0 {
+			rosterValued++
+		}
+	}
+	if rosterValued < len(snapshot.Roster) {
+		warnings = append(warnings, fmt.Sprintf("FantasyPros valued %d of %d rostered players; missing dynasty values weaken cut protection and should be investigated", rosterValued, len(snapshot.Roster)))
+	}
+	return warnings, nil
 }
 
 func appendObservationSource(existing, added string) string {

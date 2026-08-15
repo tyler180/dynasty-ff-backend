@@ -186,10 +186,14 @@ type rankingPlayer struct {
 }
 
 func (p rankingPlayer) id() string {
-	if p.PlayerID.String() != "" {
-		return p.PlayerID.String()
+	// FantasyPros exposes its stable cross-provider identifier as fpid. The
+	// player_id field in ranking responses is a different namespace and can
+	// numerically collide with another player's fpid, so only use it when fpid
+	// is absent.
+	if p.FPID.String() != "" {
+		return p.FPID.String()
 	}
-	return p.FPID.String()
+	return p.PlayerID.String()
 }
 
 type projectionResponse struct {
