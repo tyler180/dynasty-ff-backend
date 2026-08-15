@@ -16,6 +16,10 @@ jobs:
   update:
     runs-on: ubuntu-latest
 
+    env:
+      GOPRIVATE: github.com/tyler180/*
+      GONOSUMDB: github.com/tyler180/*
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,6 +43,7 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: |
+          echo "Updating dynasty-ff-models to version ${VERSION}"
           go get github.com/tyler180/dynasty-ff-models@"$VERSION"
           go mod tidy
 
