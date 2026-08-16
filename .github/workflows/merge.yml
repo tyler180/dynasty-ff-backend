@@ -9,6 +9,8 @@ on:
 
 permissions:
   contents: read
+  actions: read
+  id-token: write
 
 env:
   AWS_REGION: us-west-2
@@ -17,6 +19,7 @@ env:
 jobs:
   terraform:
     name: Terraform
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     env:
       TF_VAR_api_key: ${{ secrets.TF_VAR_API_KEY }}
@@ -69,14 +72,37 @@ jobs:
         run: terraform init
         working-directory: dynasty-ff-backend/terraform
 
+      - name: Find PR Check workflow run
+        id: pr-run
+
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          RUN_ID=$(gh run list \
+          --workflow=pr.yml \
+          --commit="$PR_SHA" \
+          --event=pull_request \
+          --status=success \
+          --limit=1 \
+          --json databaseId \
+          --jq '.[0].databaseId')
+
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+          echo "No successful PR Check workflow run found for commit $PR_SHA"
+          exit 1
+          fi
+
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
       - name: Download Plan Artifact
-        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: dev-plan
           path: ${{ runner.temp }}
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.pr-run.outputs.run_id }}
 
       - name: Terraform apply
-        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: terraform apply -auto-approve -input=false ${{ runner.temp }}/tfplan
         working-directory: dynasty-ff-backend/terraform
