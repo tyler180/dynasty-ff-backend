@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	source "github.com/tyler180/dynasty-ff-models/analysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/snapshotanalysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
+	source "github.com/tyler180/dynasty-ff-models/analysis"
 )
 
 type fakeSnapshots struct{ snapshot league.Snapshot }
@@ -29,7 +29,10 @@ func (f *fakeSnapshots) SnapshotAt(context.Context, league.ID, league.FranchiseI
 
 type fakeIdentities struct{ profile player.Profile }
 
-type fakeSyncer struct{ result mflingest.Result }
+type fakeSyncer struct {
+	result  mflingest.Result
+	request *mflingest.Request
+}
 
 type fakeIdentitySyncer struct{ result identitysync.Result }
 
@@ -43,7 +46,10 @@ func (f fakeIdentitySyncer) Sync(context.Context, identitysync.Request) (identit
 	return f.result, nil
 }
 
-func (f fakeSyncer) Sync(context.Context, mflingest.Request) (mflingest.Result, error) {
+func (f fakeSyncer) Sync(_ context.Context, request mflingest.Request) (mflingest.Result, error) {
+	if f.request != nil {
+		*f.request = request
+	}
 	return f.result, nil
 }
 
@@ -120,6 +126,25 @@ func TestHandlerRunsReadOnlyMFLSync(t *testing.T) {
 	}
 	if response.Snapshot == nil || !response.Snapshot.ObservedAt.Equal(want.ObservedAt) {
 		t.Fatalf("response snapshot = %+v, want observed_at %s", response.Snapshot, want.ObservedAt)
+	}
+}
+
+func TestHandlerCanSkipFantasyProsDuringMFLSync(t *testing.T) {
+	handler, err := New(&fakeSnapshots{}, &fakeIdentities{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var captured mflingest.Request
+	handler.WithSyncer(fakeSyncer{request: &captured})
+	_, err = handler.Handle(context.Background(), Request{
+		Action: ActionSyncMFL, LeagueID: "79286", FranchiseID: "0005", Season: 2026,
+		SkipFantasyPros: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !captured.SkipEvaluations {
+		t.Fatal("skip_fantasypros was not forwarded to MFL ingestion")
 	}
 }
 

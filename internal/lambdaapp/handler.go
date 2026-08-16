@@ -46,6 +46,7 @@ type Request struct {
 	Aliases            []identity.Alias   `json:"aliases,omitempty"`
 	IncludeDraft       *bool              `json:"include_draft,omitempty"`
 	LiveDraft          bool               `json:"live_draft,omitempty"`
+	SkipFantasyPros    bool               `json:"skip_fantasypros,omitempty"`
 	TimeoutSeconds     int                `json:"timeout_seconds,omitempty"`
 	LeagueConfigPath   string             `json:"league_config_path,omitempty"`
 	Workers            int                `json:"workers,omitempty"`
@@ -221,7 +222,7 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 		result, err := h.syncer.Sync(ctx, mflingest.Request{
 			Year: request.Season, LeagueID: string(request.LeagueID), FranchiseID: string(request.FranchiseID),
 			LeagueConfigPath: request.LeagueConfigPath, IncludeDraft: includeDraft,
-			LiveDraft: request.LiveDraft, Timeout: timeout,
+			LiveDraft: request.LiveDraft, SkipEvaluations: request.SkipFantasyPros, Timeout: timeout,
 		})
 		if err != nil {
 			return Response{}, err

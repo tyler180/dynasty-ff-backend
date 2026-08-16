@@ -34,6 +34,7 @@ type Request struct {
 	LeagueConfigPath string
 	IncludeDraft     bool
 	LiveDraft        bool
+	SkipEvaluations  bool
 	Timeout          time.Duration
 }
 
@@ -56,7 +57,7 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	if s.MCPCommand == "" {
 		return Result{}, fmt.Errorf("MFL MCP command is required")
 	}
-	if s.Credentials == nil || s.Identities == nil || s.Snapshots == nil || s.Evaluations == nil {
+	if s.Credentials == nil || s.Identities == nil || s.Snapshots == nil || (!request.SkipEvaluations && s.Evaluations == nil) {
 		return Result{}, fmt.Errorf("MFL credentials, identity repository, snapshot repository, and player evaluations are required")
 	}
 	if request.Year < 2000 || request.Year > 2100 || request.LeagueID == "" || request.FranchiseID == "" {
@@ -98,9 +99,13 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	evaluationWarnings, err := enrichEvaluations(ctx, &loaded.Snapshot, request.Year, loaded.Refresh.SyncedAt, s.Identities, s.Evaluations)
-	if err != nil {
-		return Result{}, err
+	evaluationWarnings := []string{}
+	if request.SkipEvaluations {
+		evaluationWarnings = append(evaluationWarnings, "FantasyPros enrichment was skipped; analysis will use MFL data and provider-independent safeguards")
+	} else if warnings, evaluationErr := enrichEvaluations(ctx, &loaded.Snapshot, request.Year, loaded.Refresh.SyncedAt, s.Identities, s.Evaluations); evaluationErr != nil {
+		evaluationWarnings = append(evaluationWarnings, fmt.Sprintf("FantasyPros enrichment unavailable (%v); continuing with MFL data and provider-independent safeguards", evaluationErr))
+	} else {
+		evaluationWarnings = append(evaluationWarnings, warnings...)
 	}
 	records, err := mflsync.NormalizeRecords(ctx, loaded.Snapshot, s.Identities, loaded.Refresh.SyncedAt)
 	if err != nil {
