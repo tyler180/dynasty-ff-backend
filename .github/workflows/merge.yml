@@ -1,0 +1,82 @@
+name: PR Merge
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-west-2
+  ECR_REPOSITORY: dynasty-ff-backend-dev
+
+jobs:
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_api_key: ${{ secrets.TF_VAR_API_KEY }}
+      TF_VAR_fantasypros_api_key: ${{ secrets.TF_VAR_FANTASYPROS_API_KEY }}
+      TF_VAR_username: ${{ secrets.TF_VAR_USERNAME }}
+      TF_VAR_password: ${{ secrets.TF_VAR_PASSWORD }}
+      TF_VAR_league_id: ${{ secrets.TF_VAR_LEAGUE_ID }}
+      TF_VAR_franchise_id: ${{ secrets.TF_VAR_FRANCHISE_ID }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+
+      - name: Checkout backend
+        uses: actions/checkout@v7
+        with:
+          path: dynasty-ff-backend
+
+      - name: Checkout models
+        uses: actions/checkout@v7
+        with:
+          repository: tyler180/dynasty-ff-models
+          token: ${{ secrets.GH_PRIVATE_REPOS_TOKEN }}
+          path: dynasty-ff-models
+
+      - name: Checkout read-only MFL MCP server
+        uses: actions/checkout@v7
+        with:
+          repository: tyler180/mfl-mcp
+          token: ${{ secrets.GH_PRIVATE_REPOS_TOKEN }}
+          path: mfl/mfl-mcp
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::138013422358:role/github-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+        working-directory: dynasty-ff-backend/terraform
+
+      - name: Terraform init
+        run: terraform init
+        working-directory: dynasty-ff-backend/terraform
+
+      - name: Download Plan Artifact
+        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/download-artifact@v4
+        with:
+          name: dev-plan
+          path: ${{ runner.temp }}
+
+      - name: Terraform apply
+        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: terraform apply -auto-approve -input=false ${{ runner.temp }}/tfplan
+        working-directory: dynasty-ff-backend/terraform
