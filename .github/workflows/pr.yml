@@ -11,6 +11,8 @@ on:
 
 permissions:
   contents: read
+  actions: read
+  id-token: write
 
 env:
   AWS_REGION: us-west-2
@@ -116,13 +118,11 @@ jobs:
         working-directory: dynasty-ff-backend/terraform
 
       - name: Terraform plan
-        # if: github.event_name == 'pull_request'
         run: terraform plan -out=${{ runner.temp }}/tfplan
         working-directory: dynasty-ff-backend/terraform
 
       - name: Upload Plan Artifact
-        # if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: dev-plan
           path: ${{ runner.temp }}/tfplan
