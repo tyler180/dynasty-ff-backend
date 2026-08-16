@@ -151,9 +151,16 @@ and writes the normalized snapshot to S3:
   "season": 2026,
   "league_id": "79286",
   "franchise_id": "0005",
-  "include_draft": true
+  "include_draft": true,
+  "skip_fantasypros": true
 }
 ```
+
+Set `skip_fantasypros` to `true` for a zero-call fallback when FantasyPros is
+unavailable or rate limited. The stored snapshot will use MFL rosters, draft
+state, league-scored history, rookie ADP, and the actual free-agent pool. When
+the flag is omitted, FantasyPros enrichment is attempted but provider failures
+produce a warning instead of aborting the MFL sync.
 
 Analyze the latest stored snapshot by joining its canonical roster IDs to the
 player profiles in DynamoDB:
