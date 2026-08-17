@@ -55,6 +55,55 @@ func (f fakeEvaluations) Evaluations(context.Context, int) ([]fantasypros.Evalua
 	return f, nil
 }
 
+type mutableIdentities struct {
+	profiles map[player.ID]player.Profile
+	aliases  map[player.ExternalID]player.ID
+}
+
+func (m *mutableIdentities) GetPlayer(_ context.Context, id player.ID) (player.Profile, error) {
+	return m.profiles[id], nil
+}
+func (m *mutableIdentities) PutPlayer(_ context.Context, profile player.Profile) error {
+	m.profiles[profile.ID] = profile
+	return nil
+}
+func (m *mutableIdentities) PutAlias(_ context.Context, alias identity.Alias) error {
+	m.aliases[alias.ExternalID] = alias.PlayerID
+	return nil
+}
+func (m *mutableIdentities) ResolvePlayer(_ context.Context, externalID player.ExternalID) (player.Profile, error) {
+	return m.profiles[m.aliases[externalID]], nil
+}
+func (m *mutableIdentities) ResolvePlayers(_ context.Context, externalIDs []player.ExternalID) (map[player.ExternalID]player.Profile, error) {
+	result := make(map[player.ExternalID]player.Profile)
+	for _, externalID := range externalIDs {
+		if id, found := m.aliases[externalID]; found {
+			result[externalID] = m.profiles[id]
+		}
+	}
+	return result, nil
+}
+
+func TestEnsureMFLIdentitiesBootstrapsNewlyObservedPlayer(t *testing.T) {
+	repository := &mutableIdentities{profiles: map[player.ID]player.Profile{}, aliases: map[player.ExternalID]player.ID{}}
+	snapshot := source.Snapshot{
+		Roster:           []source.Player{{ID: "17750", Name: "New Rookie", RookieYear: 2026}},
+		RookieCandidates: []source.RookieCandidate{{ID: "17750", Name: "New Rookie", RookieYear: 2026}},
+	}
+	warnings, err := ensureMFLIdentities(context.Background(), &snapshot, time.Date(2026, 8, 17, 0, 0, 0, 0, time.UTC), repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	externalID := player.ExternalID{Provider: player.ProviderMFL, Value: "17750"}
+	canonicalID, found := repository.aliases[externalID]
+	if !found || repository.profiles[canonicalID].DisplayName != "New Rookie" || repository.profiles[canonicalID].RookieYear != 2026 {
+		t.Fatalf("bootstrapped identity = %+v / %+v", repository.aliases, repository.profiles)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "17750") {
+		t.Fatalf("warnings = %v", warnings)
+	}
+}
+
 type fakeIdentities struct {
 	byMFL map[string]player.Profile
 	byFP  map[string]player.Profile

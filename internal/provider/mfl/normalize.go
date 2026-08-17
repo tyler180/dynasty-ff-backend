@@ -433,6 +433,21 @@ func ownedPicksFromDraftResults(payload map[string]any, franchiseID string, base
 	return picks, true
 }
 
+func draftedPlayerIDsFromResults(payload map[string]any) []string {
+	seen := make(map[string]bool)
+	walkObjects(envelope(payload, "draftResults"), func(item map[string]any) {
+		if id := textField(item, "player"); id != "" {
+			seen[id] = true
+		}
+	})
+	result := make([]string, 0, len(seen))
+	for id := range seen {
+		result = append(result, id)
+	}
+	sort.Strings(result)
+	return result
+}
+
 func futurePickInventory(payload map[string]any, franchiseID string, franchiseNames map[string]string) ([]any, bool) {
 	root := envelope(payload, "futureDraftPicks")
 	searchRoot := any(root)

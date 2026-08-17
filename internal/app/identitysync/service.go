@@ -3,7 +3,6 @@ package identitysync
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"sort"
 	"strings"
@@ -324,14 +323,12 @@ func mergeProfile(existing, imported player.Profile) player.Profile {
 }
 
 func canonicalID(record dynastyprocess.Player) player.ID {
-	anchor := "mfl:" + record.MFLID
+	externalID := player.ExternalID{Provider: player.ProviderMFL, Value: record.MFLID}
 	if record.GSISID != "" {
-		anchor = "gsis:" + record.GSISID
+		externalID = player.ExternalID{Provider: player.ProviderGSIS, Value: record.GSISID}
 	}
-	digest := sha256.Sum256([]byte("dynasty-ff-player-v1:" + anchor))
-	digest[6] = (digest[6] & 0x0f) | 0x50
-	digest[8] = (digest[8] & 0x3f) | 0x80
-	return player.ID(fmt.Sprintf("player-%x-%x-%x-%x-%x", digest[0:4], digest[4:6], digest[6:8], digest[8:10], digest[10:16]))
+	id, _ := player.DeterministicID(externalID)
+	return id
 }
 
 func run(ctx context.Context, workers int, reserve time.Duration, tasks []func(context.Context) error) (int, bool, error) {

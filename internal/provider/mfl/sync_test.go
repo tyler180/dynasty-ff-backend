@@ -205,6 +205,26 @@ func TestSyncLiveDraftExcludesJustSelectedRookie(t *testing.T) {
 	}
 }
 
+func TestSyncDraftResultsExcludeSelectedRookieWithoutLiveFlag(t *testing.T) {
+	base, err := LoadBase(teamMcLeanFixture(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	caller := fixtureCaller()
+	caller.responses["get_draft_results"] = map[string]any{"draftResults": map[string]any{"draftUnit": map[string]any{"draftPick": []any{
+		map[string]any{"round": "01", "pick": "06", "franchise": "0005", "player": "17000"},
+	}}}}
+	result, err := Sync(context.Background(), caller, base, Options{
+		Year: 2026, LeagueID: "79286", FranchiseID: "0005", SnapshotDate: time.Date(2026, 8, 17, 0, 0, 0, 0, time.UTC), IncludeDraft: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Snapshot.RookieCandidates) != 0 {
+		t.Fatalf("drafted rookie remained available: %+v", result.Snapshot.RookieCandidates)
+	}
+}
+
 func TestLoadProjectionsSupportsBareMap(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "projections.json")
 	if err := WriteFile(path, []byte(`{"15751":123.5,"15418":45}`)); err != nil {
