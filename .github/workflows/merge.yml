@@ -37,11 +37,13 @@ jobs:
       - name: Checkout backend
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           path: dynasty-ff-backend
 
       - name: Checkout models
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           repository: tyler180/dynasty-ff-models
           token: ${{ secrets.GH_PRIVATE_REPOS_TOKEN }}
           path: dynasty-ff-models
@@ -49,6 +51,7 @@ jobs:
       - name: Checkout read-only MFL MCP server
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           repository: tyler180/mfl-mcp
           token: ${{ secrets.GH_PRIVATE_REPOS_TOKEN }}
           path: mfl/mfl-mcp
