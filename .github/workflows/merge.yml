@@ -30,6 +30,7 @@ jobs:
       TF_VAR_franchise_id: ${{ secrets.TF_VAR_FRANCHISE_ID }}
     permissions:
       contents: read
+      actions: read
       id-token: write
     steps:
 
@@ -80,6 +81,7 @@ jobs:
           PR_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           RUN_ID=$(gh run list \
+          --repo="${{ github.repository }}" \
           --workflow=pr.yml \
           --commit="$PR_SHA" \
           --event=pull_request \
