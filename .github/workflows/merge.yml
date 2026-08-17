@@ -58,8 +58,8 @@ jobs:
           --jq '.[0].databaseId')
 
           if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-          echo "No successful PR Check workflow run found for commit $PR_SHA"
-          exit 1
+            echo "No successful PR Check workflow run found for commit $PR_SHA"
+            exit 1
           fi
 
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
@@ -115,5 +115,5 @@ jobs:
         working-directory: dynasty-ff-backend/terraform
 
       - name: Terraform apply
-        run: terraform apply -auto-approve -input=false ${{ runner.temp }}/tfplan
+        run: terraform apply -auto-approve -input=false ${{ runner.temp }}/dev-plan/tfplan
         working-directory: dynasty-ff-backend/terraform
