@@ -7,9 +7,20 @@ data "aws_ecr_authorization_token" "token" {}
 locals {
   source_path = abspath("${path.module}/../..")
   path_include = [
-    "dynasty-ff-backend/**",
-    "dynasty-ff-models/**",
-    "mfl/mfl-mcp/**",
+    "dynasty-ff-backend/cmd/**",
+    "dynasty-ff-backend/config/**",
+    "dynasty-ff-backend/data/**",
+    "dynasty-ff-backend/docs/**",
+    "dynasty-ff-backend/internal/**",
+    "dynasty-ff-models/analysis/**",
+    "dynasty-ff-models/cmd/**",
+    "dynasty-ff-models/config/**",
+    "dynasty-ff-models/data/**",
+    "dynasty-ff-models/docs/**",
+    "dynasty-ff-models/draft/**",
+    "dynasty-ff-models/internal/**",
+    "mfl/mfl-mcp/cmd/**",
+    "mfl/mfl-mcp/internal/**",
   ]
   path_exclude = [
     "dynasty-ff-*/terraform/**",
