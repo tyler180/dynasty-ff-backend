@@ -5,6 +5,7 @@ package mflingest
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -99,6 +100,10 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	identityWarnings, err := ensureMFLIdentities(ctx, &loaded.Snapshot, loaded.Refresh.SyncedAt, s.Identities)
+	if err != nil {
+		return Result{}, err
+	}
 	evaluationWarnings := []string{}
 	if request.SkipEvaluations {
 		evaluationWarnings = append(evaluationWarnings, "FantasyPros enrichment was skipped; analysis will use MFL data and provider-independent safeguards")
@@ -116,9 +121,99 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	}
 	return Result{
 		Snapshot: records.LeagueSnapshot,
-		Warnings: append(append([]string(nil), loaded.Refresh.Warnings...), evaluationWarnings...),
+		Warnings: append(append(append([]string(nil), loaded.Refresh.Warnings...), identityWarnings...), evaluationWarnings...),
 		SyncedAt: loaded.Refresh.SyncedAt,
 	}, nil
+}
+
+type mflIdentityObservation struct {
+	name       string
+	rookieYear int
+}
+
+func ensureMFLIdentities(
+	ctx context.Context,
+	snapshot *source.Snapshot,
+	observedAt time.Time,
+	repository identity.Repository,
+) ([]string, error) {
+	bulk, ok := repository.(identity.BulkResolver)
+	if !ok {
+		return nil, fmt.Errorf("identity repository does not support batch resolution for MFL players")
+	}
+	observations := make(map[string]mflIdentityObservation)
+	observe := func(id, name string, rookieYear int) {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return
+		}
+		current := observations[id]
+		if current.name == "" && strings.TrimSpace(name) != "" {
+			current.name = strings.TrimSpace(name)
+		}
+		if current.rookieYear == 0 && rookieYear != 0 {
+			current.rookieYear = rookieYear
+		}
+		observations[id] = current
+	}
+	for _, rostered := range snapshot.Roster {
+		observe(rostered.ID, rostered.Name, rostered.RookieYear)
+	}
+	for _, candidates := range snapshot.ReplacementLevels.CandidatesByPosition {
+		for _, candidate := range candidates {
+			observe(candidate.PlayerID, candidate.Name, candidate.RookieYear)
+		}
+	}
+	for _, candidate := range snapshot.RookieCandidates {
+		observe(candidate.ID, candidate.Name, candidate.RookieYear)
+	}
+
+	externalIDs := make([]player.ExternalID, 0, len(observations))
+	for id := range observations {
+		externalIDs = append(externalIDs, player.ExternalID{Provider: player.ProviderMFL, Value: id})
+	}
+	resolved, err := bulk.ResolvePlayers(ctx, externalIDs)
+	if err != nil {
+		return nil, fmt.Errorf("resolve MFL identities before snapshot normalization: %w", err)
+	}
+	missing := make([]string, 0)
+	for id := range observations {
+		externalID := player.ExternalID{Provider: player.ProviderMFL, Value: id}
+		if _, found := resolved[externalID]; !found {
+			missing = append(missing, id)
+		}
+	}
+	sort.Strings(missing)
+	for _, id := range missing {
+		externalID := player.ExternalID{Provider: player.ProviderMFL, Value: id}
+		canonicalID, err := player.DeterministicID(externalID)
+		if err != nil {
+			return nil, err
+		}
+		observation := observations[id]
+		name := observation.name
+		if name == "" {
+			name = "MFL player " + id
+		}
+		profile := player.Profile{ID: canonicalID, DisplayName: name, RookieYear: observation.rookieYear}
+		if timestamp := snapshot.BirthdatesUnix[id]; timestamp > 0 {
+			birthDate := time.Unix(timestamp, 0).UTC()
+			profile.BirthDate = &birthDate
+		}
+		if err := repository.PutPlayer(ctx, profile); err != nil {
+			return nil, fmt.Errorf("bootstrap MFL player %s: %w", id, err)
+		}
+		if err := repository.PutAlias(ctx, identity.Alias{
+			ExternalID: externalID, PlayerID: canonicalID, Source: "mfl",
+			ResolutionMethod: "provider_native_bootstrap", Confidence: 1, IngestedAt: observedAt.UTC(),
+		}); err != nil {
+			return nil, fmt.Errorf("bootstrap MFL alias %s: %w", id, err)
+		}
+	}
+	if len(missing) == 0 {
+		return nil, nil
+	}
+	return []string{fmt.Sprintf("bootstrapped %d newly observed MFL player identities: %s", len(missing), strings.Join(missing, ", "))}, nil
 }
 
 func enrichEvaluations(

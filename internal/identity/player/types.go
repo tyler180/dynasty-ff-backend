@@ -2,6 +2,7 @@
 package player
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"strings"
 	"time"
@@ -38,6 +39,18 @@ const (
 type ExternalID struct {
 	Provider Provider `json:"provider"`
 	Value    string   `json:"value"`
+}
+
+// DeterministicID creates a stable canonical ID when a provider-native player
+// appears before it is present in the cross-provider identity feed.
+func DeterministicID(externalID ExternalID) (ID, error) {
+	if err := externalID.Validate(); err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256([]byte("dynasty-ff-player-v1:" + string(externalID.Provider) + ":" + strings.TrimSpace(externalID.Value)))
+	digest[6] = (digest[6] & 0x0f) | 0x50
+	digest[8] = (digest[8] & 0x3f) | 0x80
+	return ID(fmt.Sprintf("player-%x-%x-%x-%x-%x", digest[0:4], digest[4:6], digest[6:8], digest[8:10], digest[10:16])), nil
 }
 
 func (id ExternalID) Validate() error {

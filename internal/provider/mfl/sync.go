@@ -150,6 +150,9 @@ func Sync(ctx context.Context, caller Caller, base BaseDocument, options Options
 		}
 		var draftPayload map[string]any
 		if callOptional(ctx, caller, "get_draft_results", common, &draftPayload, &warnings) {
+			for _, id := range draftedPlayerIDsFromResults(draftPayload) {
+				draftedPlayerIDs[id] = true
+			}
 			if picks, ok := ownedPicksFromDraftResults(draftPayload, options.FranchiseID, base, franchiseNames); ok {
 				if len(picks) > 0 {
 					snapshot.Draft.CurrentYearPicks = picks

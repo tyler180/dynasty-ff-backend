@@ -43,6 +43,9 @@ func TestDraftResultsProvideOwnedPicksAndState(t *testing.T) {
 	if status != "in_progress" {
 		t.Fatalf("status = %q, want in_progress", status)
 	}
+	if got := draftedPlayerIDsFromResults(payload); !reflect.DeepEqual(got, []string{"17000", "17001"}) {
+		t.Fatalf("drafted player IDs = %v", got)
+	}
 }
 
 func TestFuturePickInventorySelectsOnlyRequestedFranchise(t *testing.T) {
