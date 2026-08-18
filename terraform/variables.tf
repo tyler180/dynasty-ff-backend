@@ -26,6 +26,51 @@ variable "mfl_sync_franchise_id" {
   default     = "0005"
 }
 
+variable "api_jwt_issuer" {
+  description = "HTTPS issuer URL for the OIDC provider whose JWTs may call the read-only HTTP API"
+  type        = string
+  default     = "https://auth.k8s.749rmw.com/application/o/dynasty-ff/"
+
+  validation {
+    condition     = startswith(var.api_jwt_issuer, "https://")
+    error_message = "api_jwt_issuer must be an HTTPS URL."
+  }
+}
+
+variable "api_jwt_audiences" {
+  description = "Allowed JWT audience values for the HTTP API"
+  type        = set(string)
+  default     = ["dynasty-ff-frontend"]
+
+  validation {
+    condition     = length(var.api_jwt_audiences) > 0 && alltrue([for audience in var.api_jwt_audiences : trimspace(audience) != ""])
+    error_message = "api_jwt_audiences must contain at least one non-empty audience."
+  }
+}
+
+variable "api_jwt_required_scopes" {
+  description = "Optional OAuth scopes required on authenticated HTTP API routes"
+  type        = set(string)
+  default     = []
+}
+
+variable "api_allowed_origins" {
+  description = "Exact browser origins allowed to call the HTTP API; wildcard origins are rejected because credentials are enabled"
+  type        = set(string)
+  default     = ["http://localhost:3000"]
+
+  validation {
+    condition     = length(var.api_allowed_origins) > 0 && alltrue([for origin in var.api_allowed_origins : origin != "*" && (startswith(origin, "https://") || startswith(origin, "http://localhost"))])
+    error_message = "api_allowed_origins must contain exact HTTPS origins or localhost development origins, never a wildcard."
+  }
+}
+
+variable "api_access_log_retention_days" {
+  description = "CloudWatch retention for HTTP API access logs"
+  type        = number
+  default     = 30
+}
+
 # variable "password" {
 #   type = string
 # }
