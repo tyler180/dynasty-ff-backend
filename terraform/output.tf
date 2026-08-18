@@ -26,6 +26,21 @@ output "lambda_function_name" {
   value = module.ff_backend_lambda.lambda_function_name
 }
 
+# output "http_api_url" {
+#   description = "Base URL for the authenticated read-only HTTP API"
+#   value       = aws_apigatewayv2_api.backend.api_endpoint
+# }
+
+# output "http_api_routes" {
+#   description = "HTTP routes exposed by the API; only health is unauthenticated"
+#   value = {
+#     public = [aws_apigatewayv2_route.health.route_key]
+#     authenticated = sort([
+#       for route in aws_apigatewayv2_route.authenticated : route.route_key
+#     ])
+#   }
+# }
+
 output "mfl_secret_arn" {
   description = "Secrets Manager ARN containing MFL and FantasyPros provider credentials"
   value       = module.secrets_manager.secret_arn

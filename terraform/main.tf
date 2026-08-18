@@ -63,6 +63,18 @@ module "ff_backend_lambda" {
 
   timeout = 900
 
+  # allowed_triggers = {
+  #   MFLSync = {
+  #     principal  = "events.amazonaws.com"
+  #     source_arn = aws_cloudwatch_event_rule.mfl_sync.arn
+  #     # source_arn = "arn:aws:events:us-west-2:${data.aws_caller_identity.current.account_id}:rule/${local.name}-mfl-sync"
+  #   }
+  #   AllowExecutionFromHTTPAPI = {
+  #     principal  = "apigateway.amazonaws.com"
+  #     source_arn = "${data.aws_apigatewayv2_api.backend.execution_arn}/*/*"
+  #   }
+  # }
+
   attach_cloudwatch_logs_policy = true
   attach_policy_json            = true
   policy_json                   = data.aws_iam_policy_document.lambda_policy_doc.json

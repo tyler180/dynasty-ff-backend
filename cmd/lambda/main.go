@@ -26,7 +26,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	lambda.Start(handler.Handle)
+	entrypoint, err := lambdaapp.NewEntrypoint(handler)
+	if err != nil {
+		log.Fatal(err)
+	}
+	lambda.Start(entrypoint.Handle)
 }
 
 func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {

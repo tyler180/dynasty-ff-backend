@@ -72,6 +72,62 @@ Invoke it with an explicit action. For example, the health check is:
 {"action":"health"}
 ```
 
+## Authenticated HTTP API
+
+Terraform provisions an API Gateway HTTP API in front of the same Lambda. Its
+JWT authorizer accepts tokens only from the configured HTTPS issuer and audience.
+Set these values for your OIDC provider when planning or applying:
+
+```hcl
+api_jwt_issuer    = "https://auth.k8s.749rmw.com/application/o/dynasty-ff/"
+api_jwt_audiences = ["<authentik-client-id>"]
+api_allowed_origins = [
+  "https://dynasty.example.com",
+  "http://localhost:3000",
+]
+```
+
+Create an Authentik OAuth2/OpenID provider and application for `dynasty-ff`
+before applying. The issuer must exactly match the token's `iss` claim,
+including Authentik's trailing slash. Use that provider's client ID as the API
+audience. The provider's redirect URI belongs to the self-hosted frontend; no
+OIDC client secret is stored in this backend or sent to a browser.
+
+The HTTP boundary is intentionally read-only. It does not expose a generic action
+route, identity writes, snapshot writes, MFL sync, or identity sync. API Gateway
+validates the bearer token before these routes reach Lambda:
+
+- `POST /v1/analyze`
+- `GET /v1/snapshots/latest`
+- `GET /v1/snapshots/at`
+
+`GET /health` is public for load-balancer and uptime probes and returns no league
+data. The analyze request body is the direct action payload without an `action`
+field:
+
+```json
+{
+  "season": 2026,
+  "league_id": "79286",
+  "franchise_id": "0005",
+  "projection_fallback": "auto",
+  "cap_relief_target": 10
+}
+```
+
+Call it with an OIDC access token:
+
+```sh
+curl --fail-with-body \
+  --request POST "$DYNASTY_API_URL/v1/analyze" \
+  --header "Authorization: Bearer $DYNASTY_ACCESS_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data '{"season":2026,"league_id":"79286","franchise_id":"0005","projection_fallback":"auto","cap_relief_target":10}'
+```
+
+API errors intentionally omit internal storage and provider details. API Gateway
+access logs contain request metadata but not bearer tokens or request bodies.
+
 Normalized league snapshots support `put_snapshot`, `latest_snapshot`, and
 `snapshot_at`. Snapshot objects are immutable and stored below:
 
