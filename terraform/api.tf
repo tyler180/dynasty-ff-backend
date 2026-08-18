@@ -29,7 +29,9 @@ module "dynasty_ff_backend_apigateway" {
 
   routes = {
     "GET /v1/snapshots/at" = {
-      authorization_type = "JWT"
+      authorization_type   = "JWT"
+      authorizer_key       = "jwt"
+      authorization_scopes = var.api_jwt_required_scopes
 
       integration = {
         uri                    = module.ff_backend_lambda.lambda_function_arn
@@ -41,7 +43,9 @@ module "dynasty_ff_backend_apigateway" {
     }
 
     "GET /v1/snapshots/latest" = {
-      authorization_type = "JWT"
+      authorization_type   = "JWT"
+      authorizer_key       = "jwt"
+      authorization_scopes = var.api_jwt_required_scopes
 
       integration = {
         uri                    = module.ff_backend_lambda.lambda_function_arn
@@ -53,7 +57,9 @@ module "dynasty_ff_backend_apigateway" {
     }
 
     "POST /v1/analyze" = {
-      authorization_type = "JWT"
+      authorization_type   = "JWT"
+      authorizer_key       = "jwt"
+      authorization_scopes = var.api_jwt_required_scopes
 
       integration = {
         uri                    = module.ff_backend_lambda.lambda_function_arn
@@ -68,7 +74,11 @@ module "dynasty_ff_backend_apigateway" {
       authorization_type = "NONE"
 
       integration = {
-
+        uri                    = module.ff_backend_lambda.lambda_function_arn
+        payload_format_version = "2.0"
+        method                 = "POST"
+        type                   = "AWS_PROXY"
+        timeout_milliseconds   = 30000
       }
     }
   }
@@ -102,10 +112,10 @@ module "dynasty_ff_backend_apigateway" {
 #   api_id = one(data.aws_apigatewayv2_apis.backend.ids)
 # }
 
-# resource "aws_lambda_permission" "http_api" {
-#   statement_id  = "AllowExecutionFromHTTPAPI"
-#   action        = "lambda:InvokeFunction"
-#   function_name = module.ff_backend_lambda.lambda_function_name
-#   principal     = "apigateway.amazonaws.com"
-#   source_arn    = "${module.dynasty_ff_backend_apigateway.api_execution_arn}/*/*"
-# }
+resource "aws_lambda_permission" "http_api" {
+  statement_id  = "AllowExecutionFromHTTPAPI"
+  action        = "lambda:InvokeFunction"
+  function_name = module.ff_backend_lambda.lambda_function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${module.dynasty_ff_backend_apigateway.api_execution_arn}/*/*"
+}
