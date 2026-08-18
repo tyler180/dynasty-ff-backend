@@ -57,7 +57,10 @@ variable "api_jwt_required_scopes" {
 variable "api_allowed_origins" {
   description = "Exact browser origins allowed to call the HTTP API; wildcard origins are rejected because credentials are enabled"
   type        = set(string)
-  default     = ["http://localhost:3000"]
+  default = [
+    "https://dynasty-ff.749rmw.com",
+    "http://localhost:3000",
+  ]
 
   validation {
     condition     = length(var.api_allowed_origins) > 0 && alltrue([for origin in var.api_allowed_origins : origin != "*" && (startswith(origin, "https://") || startswith(origin, "http://localhost"))])

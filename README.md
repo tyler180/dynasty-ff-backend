@@ -80,9 +80,9 @@ Set these values for your OIDC provider when planning or applying:
 
 ```hcl
 api_jwt_issuer    = "https://auth.k8s.749rmw.com/application/o/dynasty-ff/"
-api_jwt_audiences = ["<authentik-client-id>"]
+api_jwt_audiences = ["dynasty-ff-frontend"]
 api_allowed_origins = [
-  "https://dynasty.example.com",
+  "https://dynasty-ff.749rmw.com",
   "http://localhost:3000",
 ]
 ```
@@ -92,6 +92,14 @@ before applying. The issuer must exactly match the token's `iss` claim,
 including Authentik's trailing slash. Use that provider's client ID as the API
 audience. The provider's redirect URI belongs to the self-hosted frontend; no
 OIDC client secret is stored in this backend or sent to a browser.
+
+Configure these strict redirect URIs on the public Authentik client before
+wiring frontend sign-in:
+
+```text
+https://dynasty-ff.749rmw.com/auth/callback
+http://localhost:3000/auth/callback
+```
 
 The HTTP boundary is intentionally read-only. It does not expose a generic action
 route, identity writes, snapshot writes, MFL sync, or identity sync. API Gateway
