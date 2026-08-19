@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -202,6 +203,47 @@ func TestSyncLiveDraftExcludesJustSelectedRookie(t *testing.T) {
 	}
 	if got := pickLabels(result.Snapshot.Draft.CurrentYearPicks); !reflect.DeepEqual(got, []string{"2.06"}) {
 		t.Fatalf("completed live pick was not removed: %v", got)
+	}
+}
+
+func TestFastDraftSyncSkipsSlowNonDraftCalls(t *testing.T) {
+	base, err := LoadBase(teamMcLeanFixture(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	caller := fixtureCaller()
+	caller.responses["get_live_draft_results"] = map[string]any{"format": "xml", "xml": `<draftResults franchise_id="0005" paused="0" stopped="0" round="01" pick="07"><draftPick round="01" pick="06" franchise="0002" player="99999" /></draftResults>`}
+	result, err := Sync(context.Background(), caller, base, Options{
+		Year: 2026, LeagueID: "79286", FranchiseID: "0005", SnapshotDate: time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC),
+		IncludeDraft: true, LiveDraft: true, FastDraft: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Snapshot.Draft.CurrentYearPicks) == 0 || len(result.Snapshot.RookieCandidates) == 0 || result.Snapshot.RookieCandidates[0].RookieADP == 0 {
+		t.Fatalf("fast draft snapshot is incomplete: draft=%+v rookies=%+v", result.Snapshot.Draft, result.Snapshot.RookieCandidates)
+	}
+	for _, skipped := range []string{"get_rules", "get_all_rules", "get_player_profiles", "get_future_draft_picks", "get_transactions", "get_player_scores"} {
+		if slices.Contains(caller.calls, skipped) {
+			t.Fatalf("fast draft sync called %s: %v", skipped, caller.calls)
+		}
+	}
+}
+
+func TestFastDraftSyncRejectsMissingRankings(t *testing.T) {
+	base, err := LoadBase(teamMcLeanFixture(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	caller := fixtureCaller()
+	caller.responses["get_live_draft_results"] = map[string]any{"format": "xml", "xml": `<draftResults franchise_id="0005" paused="0" stopped="0" round="01" pick="07"><draftPick round="01" pick="06" franchise="0002" player="99999" /></draftResults>`}
+	caller.errors = map[string]error{"get_rookie_adp": errors.New("provider timed out")}
+	_, err = Sync(context.Background(), caller, base, Options{
+		Year: 2026, LeagueID: "79286", FranchiseID: "0005", SnapshotDate: time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC),
+		IncludeDraft: true, LiveDraft: true, FastDraft: true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "refusing to store") {
+		t.Fatalf("error = %v, want partial-snapshot rejection", err)
 	}
 }
 

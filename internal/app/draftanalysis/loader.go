@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"time"
 
-	source "github.com/tyler180/dynasty-ff-models/analysis"
 	mflsync "github.com/tyler180/dynasty-ff-backend/internal/provider/mfl"
+	source "github.com/tyler180/dynasty-ff-models/analysis"
 )
 
 type LoadOptions struct {
@@ -27,6 +27,7 @@ type LoadOptions struct {
 	SnapshotDate     string
 	IncludeDraft     bool
 	LiveDraft        bool
+	FastDraft        bool
 	Timeout          time.Duration
 	ExportPath       string
 }
@@ -66,7 +67,7 @@ func NewLoader() Loader {
 
 func (l Loader) Load(ctx context.Context, options LoadOptions) (LoadResult, error) {
 	if !options.RefreshMFL {
-		if options.ExportPath != "" || options.ProjectionPath != "" || options.LeagueConfigPath != "" || options.LiveDraft ||
+		if options.ExportPath != "" || options.ProjectionPath != "" || options.LeagueConfigPath != "" || options.LiveDraft || options.FastDraft ||
 			options.LeagueID != "" || options.FranchiseID != "" || options.Year != 0 ||
 			options.SnapshotDate != "" || len(options.CommandArguments) > 0 {
 			return LoadResult{}, fmt.Errorf("MFL refresh options require -refresh-mfl")
@@ -163,6 +164,7 @@ func (l Loader) Load(ctx context.Context, options LoadOptions) (LoadResult, erro
 		SnapshotDate: when,
 		IncludeDraft: options.IncludeDraft,
 		LiveDraft:    options.LiveDraft,
+		FastDraft:    options.FastDraft,
 	}
 	if options.ProjectionPath != "" {
 		projections, err := mflsync.LoadProjections(options.ProjectionPath, resolvedYear)

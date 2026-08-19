@@ -137,10 +137,12 @@ curl --fail-with-body \
 API errors intentionally omit internal storage and provider details. API Gateway
 access logs contain request metadata but not bearer tokens or request bodies.
 
-`POST /v1/snapshots/sync` is the draft-time refresh path. It always includes live
-draft data and skips FantasyPros calls so updating availability is fast and cannot
-be blocked by an optional provider. The request body contains only the league
-coordinates; after it succeeds, call `/v1/analyze` to analyze the new snapshot.
+`POST /v1/snapshots/sync` is the draft-time refresh path. It queues an asynchronous
+Lambda invocation and returns `202 Accepted`, avoiding API Gateway's synchronous
+integration timeout. The worker always includes live draft data and skips
+FantasyPros calls so availability cannot be blocked by an optional provider. The
+request body contains only the league coordinates; poll `/v1/snapshots/latest`
+until `observed_at` changes, then call `/v1/analyze`.
 
 Normalized league snapshots support `put_snapshot`, `latest_snapshot`, and
 `snapshot_at`. Snapshot objects are immutable and stored below:

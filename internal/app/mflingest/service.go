@@ -95,6 +95,7 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 		LeagueConfigPath: request.LeagueConfigPath,
 		IncludeDraft:     request.IncludeDraft,
 		LiveDraft:        request.LiveDraft,
+		FastDraft:        request.LiveDraft && request.SkipEvaluations,
 		Timeout:          request.Timeout,
 	})
 	if err != nil {
