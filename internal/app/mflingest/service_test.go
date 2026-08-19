@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/fantasypros"
@@ -19,6 +20,30 @@ func TestServiceRejectsIncompleteConfiguration(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected configuration error")
+	}
+}
+
+func TestCarryForwardEnrichmentPreservesFreshLiveData(t *testing.T) {
+	current := league.Snapshot{
+		DraftAssets:      []league.DraftAsset{{Season: 2026, Round: 2, Pick: 6}},
+		RookieCandidates: []league.RookieCandidate{{PlayerID: "rookie", RookieYear: 2026, RookieADP: 7.5}},
+	}
+	prior := league.Snapshot{
+		DraftAssets:      []league.DraftAsset{{Season: 2026, Round: 1, Pick: 6}},
+		RookieCandidates: []league.RookieCandidate{{PlayerID: "old-rookie", RookieYear: 2026}},
+		HistoricalPoints: league.HistoricalPoints{Seasons: []league.HistoricalSeason{{Season: 2025}}},
+		ReplacementLevels: league.ReplacementLevels{CandidatesByPosition: map[string][]league.ReplacementCandidate{
+			"WR": {{PlayerID: "replacement", Name: "Replacement", Position: "WR"}},
+		}},
+		Projections: league.Projections{Season: 2026, ByPlayerID: map[string]float64{"veteran": 100}},
+	}
+
+	carryForwardEnrichment(&current, prior)
+	if len(current.HistoricalPoints.Seasons) != 1 || len(current.ReplacementLevels.CandidatesByPosition["WR"]) != 1 || current.Projections.ByPlayerID["veteran"] != 100 {
+		t.Fatalf("enrichment was not preserved: %+v", current)
+	}
+	if current.DraftAssets[0].Pick != 6 || current.RookieCandidates[0].RookieADP != 7.5 {
+		t.Fatalf("fresh live data was overwritten: %+v / %+v", current.DraftAssets, current.RookieCandidates)
 	}
 }
 

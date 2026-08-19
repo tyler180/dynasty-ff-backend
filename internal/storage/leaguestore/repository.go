@@ -20,6 +20,10 @@ type Writer interface {
 	PutSnapshot(context.Context, league.Snapshot) error
 }
 
+type EnrichmentReader interface {
+	LatestEnrichedSnapshot(context.Context, league.ID, league.FranchiseID, int) (league.Snapshot, error)
+}
+
 type Repository interface {
 	Reader
 	Writer

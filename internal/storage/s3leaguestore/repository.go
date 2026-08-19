@@ -70,9 +70,34 @@ func (r *Repository) PutSnapshot(ctx context.Context, snapshot league.Snapshot) 
 }
 
 func (r *Repository) LatestSnapshot(ctx context.Context, leagueID league.ID, franchiseID league.FranchiseID, season int) (league.Snapshot, error) {
-	prefix, err := snapshotPrefix(leagueID, franchiseID, season)
+	keys, err := r.snapshotKeys(ctx, leagueID, franchiseID, season)
 	if err != nil {
 		return league.Snapshot{}, err
+	}
+	return r.get(ctx, keys[len(keys)-1])
+}
+
+func (r *Repository) LatestEnrichedSnapshot(ctx context.Context, leagueID league.ID, franchiseID league.FranchiseID, season int) (league.Snapshot, error) {
+	keys, err := r.snapshotKeys(ctx, leagueID, franchiseID, season)
+	if err != nil {
+		return league.Snapshot{}, err
+	}
+	for index := len(keys) - 1; index >= 0; index-- {
+		snapshot, err := r.get(ctx, keys[index])
+		if err != nil {
+			return league.Snapshot{}, err
+		}
+		if len(snapshot.HistoricalPoints.Seasons) > 0 && len(snapshot.ReplacementLevels.CandidatesByPosition) > 0 {
+			return snapshot, nil
+		}
+	}
+	return league.Snapshot{}, fmt.Errorf("%w: no enriched snapshot for %s/%s/%d", leaguestore.ErrSnapshotNotFound, leagueID, franchiseID, season)
+}
+
+func (r *Repository) snapshotKeys(ctx context.Context, leagueID league.ID, franchiseID league.FranchiseID, season int) ([]string, error) {
+	prefix, err := snapshotPrefix(leagueID, franchiseID, season)
+	if err != nil {
+		return nil, err
 	}
 
 	var keys []string
@@ -84,7 +109,7 @@ func (r *Repository) LatestSnapshot(ctx context.Context, leagueID league.ID, fra
 			ContinuationToken: continuationToken,
 		})
 		if err != nil {
-			return league.Snapshot{}, fmt.Errorf("list league snapshots in S3: %w", err)
+			return nil, fmt.Errorf("list league snapshots in S3: %w", err)
 		}
 		for _, object := range output.Contents {
 			if key := aws.ToString(object.Key); key != "" {
@@ -95,15 +120,15 @@ func (r *Repository) LatestSnapshot(ctx context.Context, leagueID league.ID, fra
 			break
 		}
 		if output.NextContinuationToken == nil {
-			return league.Snapshot{}, fmt.Errorf("list league snapshots in S3: truncated response has no continuation token")
+			return nil, fmt.Errorf("list league snapshots in S3: truncated response has no continuation token")
 		}
 		continuationToken = output.NextContinuationToken
 	}
 	if len(keys) == 0 {
-		return league.Snapshot{}, fmt.Errorf("%w: %s/%s/%d", leaguestore.ErrSnapshotNotFound, leagueID, franchiseID, season)
+		return nil, fmt.Errorf("%w: %s/%s/%d", leaguestore.ErrSnapshotNotFound, leagueID, franchiseID, season)
 	}
 	sort.Strings(keys)
-	return r.get(ctx, keys[len(keys)-1])
+	return keys, nil
 }
 
 func (r *Repository) SnapshotAt(ctx context.Context, leagueID league.ID, franchiseID league.FranchiseID, season int, observedAt time.Time) (league.Snapshot, error) {

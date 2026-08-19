@@ -79,6 +79,31 @@ func TestRepositoryPutAndReadSnapshots(t *testing.T) {
 	}
 }
 
+func TestRepositoryFindsLatestEnrichedSnapshotPastStrippedSnapshots(t *testing.T) {
+	client := &fakeS3{objects: map[string][]byte{}}
+	repository, err := New(client, "league-data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	enriched := testSnapshot(time.Date(2026, 8, 13, 12, 0, 0, 0, time.UTC))
+	enriched.HistoricalPoints.Seasons = []league.HistoricalSeason{{Season: 2025}}
+	enriched.ReplacementLevels.CandidatesByPosition = map[string][]league.ReplacementCandidate{"WR": {{PlayerID: "player-1", Name: "Replacement", Position: "WR"}}}
+	stripped := testSnapshot(time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC))
+	for _, snapshot := range []league.Snapshot{enriched, stripped} {
+		if err := repository.PutSnapshot(context.Background(), snapshot); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := repository.LatestEnrichedSnapshot(context.Background(), "79286", "0005", 2026)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.ObservedAt.Equal(enriched.ObservedAt) {
+		t.Fatalf("enriched observed_at = %s, want %s", got.ObservedAt, enriched.ObservedAt)
+	}
+}
+
 func testSnapshot(observedAt time.Time) league.Snapshot {
 	return league.Snapshot{
 		League:     league.League{ID: "79286", Name: "Test", Season: 2026},
