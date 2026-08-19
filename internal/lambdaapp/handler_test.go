@@ -36,6 +36,8 @@ type fakeSyncer struct {
 
 type fakeIdentitySyncer struct{ result identitysync.Result }
 
+type fakeSyncStarter struct{ request *Request }
+
 type fakeAnalyzer struct{ result snapshotanalysis.Result }
 
 func (f fakeAnalyzer) Analyze(context.Context, snapshotanalysis.Request) (snapshotanalysis.Result, error) {
@@ -44,6 +46,13 @@ func (f fakeAnalyzer) Analyze(context.Context, snapshotanalysis.Request) (snapsh
 
 func (f fakeIdentitySyncer) Sync(context.Context, identitysync.Request) (identitysync.Result, error) {
 	return f.result, nil
+}
+
+func (f fakeSyncStarter) Start(_ context.Context, request Request) error {
+	if f.request != nil {
+		*f.request = request
+	}
+	return nil
 }
 
 func (f fakeSyncer) Sync(_ context.Context, request mflingest.Request) (mflingest.Result, error) {
@@ -145,6 +154,24 @@ func TestHandlerCanSkipFantasyProsDuringMFLSync(t *testing.T) {
 	}
 	if !captured.SkipEvaluations {
 		t.Fatal("skip_fantasypros was not forwarded to MFL ingestion")
+	}
+}
+
+func TestHandlerStartsAsynchronousDraftSync(t *testing.T) {
+	handler, err := New(&fakeSnapshots{}, &fakeIdentities{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var captured Request
+	handler.WithSyncStarter(fakeSyncStarter{request: &captured})
+	response, err := handler.Handle(context.Background(), Request{
+		Action: ActionStartMFLSync, LeagueID: "79286", FranchiseID: "0005", Season: 2026,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Status != "accepted" || captured.Action != ActionSyncMFL || !captured.LiveDraft || !captured.SkipFantasyPros || captured.TimeoutSeconds != 120 {
+		t.Fatalf("response/request = %+v / %+v", response, captured)
 	}
 }
 

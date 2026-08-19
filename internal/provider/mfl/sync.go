@@ -18,6 +18,7 @@ type Options struct {
 	Projections  *source.Projections
 	IncludeDraft bool
 	LiveDraft    bool
+	FastDraft    bool
 }
 
 func Sync(ctx context.Context, caller Caller, base BaseDocument, options Options) (Result, error) {
@@ -92,12 +93,14 @@ func Sync(ctx context.Context, caller Caller, base BaseDocument, options Options
 	if base.Bootstrapped && !base.HasRookieSalarySchedule {
 		warnings = append(warnings, "MFL does not expose this league's custom rookie salary schedule; synchronized picks may have salary 0 until a schedule is supplied")
 	}
-	var rulesPayload, allRulesPayload map[string]any
-	if callOptional(ctx, caller, "get_rules", common, &rulesPayload, &warnings) {
-		extra["mfl_rules"] = rulesPayload
-	}
-	if callOptional(ctx, caller, "get_all_rules", map[string]any{"year": options.Year}, &allRulesPayload, &warnings) {
-		extra["mfl_all_rules"] = allRulesPayload
+	if !options.FastDraft {
+		var rulesPayload, allRulesPayload map[string]any
+		if callOptional(ctx, caller, "get_rules", common, &rulesPayload, &warnings) {
+			extra["mfl_rules"] = rulesPayload
+		}
+		if callOptional(ctx, caller, "get_all_rules", map[string]any{"year": options.Year}, &allRulesPayload, &warnings) {
+			extra["mfl_all_rules"] = allRulesPayload
+		}
 	}
 	var salaryPayload map[string]any
 	adjustment := 0.0
@@ -110,18 +113,20 @@ func Sync(ctx context.Context, caller Caller, base BaseDocument, options Options
 	for _, player := range roster {
 		playerIDs = append(playerIDs, player.ID)
 	}
-	var profilePayload map[string]any
-	if callOptional(ctx, caller, "get_player_profiles", map[string]any{
-		"year": options.Year, "player_ids": playerIDs,
-	}, &profilePayload, &warnings) {
-		for id, timestamp := range birthdates(profilePayload) {
-			snapshot.BirthdatesUnix[id] = timestamp
+	if !options.FastDraft {
+		var profilePayload map[string]any
+		if callOptional(ctx, caller, "get_player_profiles", map[string]any{
+			"year": options.Year, "player_ids": playerIDs,
+		}, &profilePayload, &warnings) {
+			for id, timestamp := range birthdates(profilePayload) {
+				snapshot.BirthdatesUnix[id] = timestamp
+			}
 		}
 	}
 
 	var freeAgentsPayload map[string]any
 	haveFreeAgents := callOptional(ctx, caller, "get_free_agents", common, &freeAgentsPayload, &warnings)
-	if len(snapshot.HistoricalPoints.Seasons) == 0 && len(snapshot.HistoricalPoints.ByPlayerID) == 0 {
+	if !options.FastDraft && len(snapshot.HistoricalPoints.Seasons) == 0 && len(snapshot.HistoricalPoints.ByPlayerID) == 0 {
 		history, replacement := loadMFLHistory(ctx, caller, options.Year, options.LeagueID, catalog, freeAgentsPayload, snapshot.League.MinimumBid, &warnings)
 		if len(history.Seasons) > 0 {
 			snapshot.HistoricalPoints = history
@@ -142,10 +147,12 @@ func Sync(ctx context.Context, caller Caller, base BaseDocument, options Options
 				snapshot.Draft.CurrentYearPicks = picks
 			}
 		}
-		var futurePayload map[string]any
-		if callOptional(ctx, caller, "get_future_draft_picks", common, &futurePayload, &warnings) {
-			if inventory, ok := futurePickInventory(futurePayload, options.FranchiseID, franchiseNames); ok {
-				extra["draft"] = map[string]any{"future_pick_inventory": inventory}
+		if !options.FastDraft {
+			var futurePayload map[string]any
+			if callOptional(ctx, caller, "get_future_draft_picks", common, &futurePayload, &warnings) {
+				if inventory, ok := futurePickInventory(futurePayload, options.FranchiseID, franchiseNames); ok {
+					extra["draft"] = map[string]any{"future_pick_inventory": inventory}
+				}
 			}
 		}
 		var draftPayload map[string]any
@@ -220,6 +227,23 @@ func Sync(ctx context.Context, caller Caller, base BaseDocument, options Options
 
 	if options.Projections != nil {
 		snapshot.Projections = *options.Projections
+	}
+	if err := ctx.Err(); err != nil {
+		return Result{}, fmt.Errorf("MFL sync did not finish before its deadline: %w", err)
+	}
+	if options.FastDraft {
+		if snapshot.Draft.Status == "" || snapshot.Draft.Status == "unknown" {
+			return Result{}, fmt.Errorf("live draft status was unavailable; refusing to store a partial draft snapshot")
+		}
+		valuedRookies := 0
+		for _, candidate := range snapshot.RookieCandidates {
+			if candidate.RookieADP > 0 {
+				valuedRookies++
+			}
+		}
+		if len(snapshot.RookieCandidates) > 0 && valuedRookies == 0 {
+			return Result{}, fmt.Errorf("rookie ADP was unavailable; refusing to store an unranked draft snapshot")
+		}
 	}
 	snapshot.SourceReconciliation = append(snapshot.SourceReconciliation,
 		fmt.Sprintf("dynasty-sync refreshed MFL-authoritative league, roster, player, salary, and draft data on %s.", snapshot.SnapshotDate))

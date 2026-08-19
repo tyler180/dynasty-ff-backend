@@ -27,6 +27,7 @@ const (
 	ActionResolvePlayer  = "resolve_player"
 	ActionPutIdentities  = "put_identities"
 	ActionSyncIdentities = "sync_identities"
+	ActionStartMFLSync   = "start_mfl_sync"
 	ActionSyncMFL        = "sync_mfl"
 	ActionAnalyze        = "analyze"
 )
@@ -71,6 +72,10 @@ type Syncer interface {
 	Sync(context.Context, mflingest.Request) (mflingest.Result, error)
 }
 
+type SyncStarter interface {
+	Start(context.Context, Request) error
+}
+
 type IdentitySyncer interface {
 	Sync(context.Context, identitysync.Request) (identitysync.Result, error)
 }
@@ -83,6 +88,7 @@ type Handler struct {
 	snapshots      leaguestore.Repository
 	identities     identity.Repository
 	syncer         Syncer
+	syncStarter    SyncStarter
 	identitySyncer IdentitySyncer
 	analyzer       Analyzer
 }
@@ -94,6 +100,11 @@ func (h *Handler) WithAnalyzer(analyzer Analyzer) *Handler {
 
 func (h *Handler) WithSyncer(syncer Syncer) *Handler {
 	h.syncer = syncer
+	return h
+}
+
+func (h *Handler) WithSyncStarter(starter SyncStarter) *Handler {
+	h.syncStarter = starter
 	return h
 }
 
@@ -231,6 +242,18 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 			Action: action, Status: "stored", Snapshot: &result.Snapshot,
 			Warnings: result.Warnings, SyncedAt: &result.SyncedAt,
 		}, nil
+	case ActionStartMFLSync:
+		if h.syncStarter == nil {
+			return Response{}, fmt.Errorf("asynchronous MFL sync is not configured")
+		}
+		includeDraft := true
+		if err := h.syncStarter.Start(ctx, Request{
+			Action: ActionSyncMFL, Season: request.Season, LeagueID: request.LeagueID, FranchiseID: request.FranchiseID,
+			IncludeDraft: &includeDraft, LiveDraft: true, SkipFantasyPros: true, TimeoutSeconds: 120,
+		}); err != nil {
+			return Response{}, err
+		}
+		return Response{Action: action, Status: "accepted"}, nil
 	case ActionAnalyze:
 		if h.analyzer == nil {
 			return Response{}, fmt.Errorf("analysis is not configured")

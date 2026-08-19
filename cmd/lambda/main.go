@@ -2,13 +2,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	awslambda "github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/snapshotanalysis"
@@ -91,10 +95,42 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 		RelevantPlayers: mflidentity.Source{MCPCommand: mcpCommand, Credentials: credentials},
 	})
 	handler.WithAnalyzer(snapshotanalysis.Service{Snapshots: snapshots, Players: identities})
+	handler.WithSyncStarter(lambdaSyncStarter{
+		client: awslambda.NewFromConfig(awsConfig), functionName: os.Getenv("AWS_LAMBDA_FUNCTION_NAME"),
+	})
 	return handler.WithSyncer(mflingest.Service{
 		MCPCommand: mcpCommand, Credentials: credentials,
 		Identities: identities, Snapshots: snapshots, Evaluations: playerEvaluations,
 	}), nil
+}
+
+type lambdaInvoker interface {
+	Invoke(context.Context, *awslambda.InvokeInput, ...func(*awslambda.Options)) (*awslambda.InvokeOutput, error)
+}
+
+type lambdaSyncStarter struct {
+	client       lambdaInvoker
+	functionName string
+}
+
+func (s lambdaSyncStarter) Start(ctx context.Context, request lambdaapp.Request) error {
+	if s.client == nil || strings.TrimSpace(s.functionName) == "" {
+		return fmt.Errorf("Lambda client and function name are required")
+	}
+	payload, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("encode asynchronous sync request: %w", err)
+	}
+	output, err := s.client.Invoke(ctx, &awslambda.InvokeInput{
+		FunctionName: aws.String(s.functionName), InvocationType: types.InvocationTypeEvent, Payload: payload,
+	})
+	if err != nil {
+		return fmt.Errorf("start asynchronous sync: %w", err)
+	}
+	if output.StatusCode != 202 {
+		return fmt.Errorf("start asynchronous sync: unexpected Lambda status %d", output.StatusCode)
+	}
+	return nil
 }
 
 func requiredEnvironment(name string) (string, error) {

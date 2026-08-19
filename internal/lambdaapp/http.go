@@ -74,7 +74,11 @@ func (h *HTTPHandler) Handle(ctx context.Context, event events.APIGatewayV2HTTPR
 			Error: "action_failed", Message: "the requested operation could not be completed",
 		})
 	}
-	return jsonHTTPResponse(http.StatusOK, response)
+	status := http.StatusOK
+	if response.Status == "accepted" {
+		status = http.StatusAccepted
+	}
+	return jsonHTTPResponse(status, response)
 }
 
 type analyzeHTTPBody struct {
@@ -122,9 +126,8 @@ func decodeSnapshotSyncRequest(event events.APIGatewayV2HTTPRequest) (Request, e
 	}
 	includeDraft := true
 	return Request{
-		Action: ActionSyncMFL, Season: input.Season, LeagueID: input.LeagueID,
-		FranchiseID: input.FranchiseID, IncludeDraft: &includeDraft, LiveDraft: true,
-		SkipFantasyPros: true, TimeoutSeconds: 25,
+		Action: ActionStartMFLSync, Season: input.Season, LeagueID: input.LeagueID,
+		FranchiseID: input.FranchiseID, IncludeDraft: &includeDraft,
 	}, nil
 }
 
