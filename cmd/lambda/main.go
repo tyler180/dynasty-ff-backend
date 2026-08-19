@@ -100,7 +100,7 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 	})
 	return handler.WithSyncer(mflingest.Service{
 		MCPCommand: mcpCommand, Credentials: credentials,
-		Identities: identities, Snapshots: snapshots, Evaluations: playerEvaluations,
+		Identities: identities, Snapshots: snapshots, Enrichments: snapshots, Evaluations: playerEvaluations,
 	}), nil
 }
 

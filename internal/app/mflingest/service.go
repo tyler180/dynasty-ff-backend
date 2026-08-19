@@ -4,6 +4,7 @@ package mflingest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -50,6 +51,7 @@ type Service struct {
 	Credentials Credentials
 	Identities  identity.Repository
 	Snapshots   leaguestore.Writer
+	Enrichments leaguestore.EnrichmentReader
 	Evaluations Evaluations
 	Now         func() time.Time
 }
@@ -81,6 +83,21 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	if now == nil {
 		now = time.Now
 	}
+	fastDraft := request.LiveDraft && request.SkipEvaluations
+	var priorEnrichment *league.Snapshot
+	if fastDraft && s.Enrichments == nil {
+		fastDraft = false
+	} else if fastDraft {
+		prior, enrichmentErr := s.Enrichments.LatestEnrichedSnapshot(ctx, league.ID(request.LeagueID), league.FranchiseID(request.FranchiseID), request.Year)
+		switch {
+		case enrichmentErr == nil:
+			priorEnrichment = &prior
+		case errors.Is(enrichmentErr, leaguestore.ErrSnapshotNotFound):
+			fastDraft = false
+		default:
+			return Result{}, fmt.Errorf("load prior snapshot enrichment: %w", enrichmentErr)
+		}
+	}
 	loader := draftanalysis.NewLoader()
 	loader.Now = now
 	loader.Connect = func(ctx context.Context, command string, arguments ...string) (draftanalysis.ManagedCaller, error) {
@@ -95,7 +112,7 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 		LeagueConfigPath: request.LeagueConfigPath,
 		IncludeDraft:     request.IncludeDraft,
 		LiveDraft:        request.LiveDraft,
-		FastDraft:        request.LiveDraft && request.SkipEvaluations,
+		FastDraft:        fastDraft,
 		Timeout:          request.Timeout,
 	})
 	if err != nil {
@@ -117,6 +134,10 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	if priorEnrichment != nil {
+		carryForwardEnrichment(&records.LeagueSnapshot, *priorEnrichment)
+		evaluationWarnings = append(evaluationWarnings, "historical points and replacement-level analysis were carried forward from the latest complete snapshot")
+	}
 	if err := s.Snapshots.PutSnapshot(ctx, records.LeagueSnapshot); err != nil {
 		return Result{}, err
 	}
@@ -125,6 +146,18 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 		Warnings: append(append(append([]string(nil), loaded.Refresh.Warnings...), identityWarnings...), evaluationWarnings...),
 		SyncedAt: loaded.Refresh.SyncedAt,
 	}, nil
+}
+
+func carryForwardEnrichment(snapshot *league.Snapshot, prior league.Snapshot) {
+	if len(snapshot.HistoricalPoints.Seasons) == 0 {
+		snapshot.HistoricalPoints = prior.HistoricalPoints
+	}
+	if len(snapshot.ReplacementLevels.CandidatesByPosition) == 0 {
+		snapshot.ReplacementLevels = prior.ReplacementLevels
+	}
+	if len(snapshot.Projections.ByPlayerID) == 0 {
+		snapshot.Projections = prior.Projections
+	}
 }
 
 type mflIdentityObservation struct {

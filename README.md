@@ -143,6 +143,9 @@ integration timeout. The worker always includes live draft data and skips
 FantasyPros calls so availability cannot be blocked by an optional provider. The
 request body contains only the league coordinates; poll `/v1/snapshots/latest`
 until `observed_at` changes, then call `/v1/analyze`.
+Draft-time workers overlay the fresh roster, picks, availability, and rookie ADP
+onto the newest snapshot containing historical points and replacement levels, so
+the fast path does not discard durable analysis inputs.
 
 Normalized league snapshots support `put_snapshot`, `latest_snapshot`, and
 `snapshot_at`. Snapshot objects are immutable and stored below:
