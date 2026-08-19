@@ -48,6 +48,35 @@ func TestHTTPHandlerMapsAnalyzeWithoutAcceptingAnAction(t *testing.T) {
 	}
 }
 
+func TestHTTPHandlerMapsSnapshotSyncToFastLiveDraftRefresh(t *testing.T) {
+	actions := &recordingActionHandler{result: Response{Action: ActionSyncMFL, Status: "stored"}}
+	handler, err := NewHTTPHandler(actions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := httpEvent("POST", "/v1/snapshots/sync")
+	event.Headers = map[string]string{"content-type": "application/json"}
+	event.Body = `{"season":2026,"league_id":"79286","franchise_id":"0005"}`
+
+	response := handler.Handle(context.Background(), event)
+	if response.StatusCode != 200 {
+		t.Fatalf("status = %d, body = %s", response.StatusCode, response.Body)
+	}
+	request := actions.request
+	if request.Action != ActionSyncMFL || request.IncludeDraft == nil || !*request.IncludeDraft || !request.LiveDraft {
+		t.Fatalf("sync request = %+v", request)
+	}
+	if !request.SkipFantasyPros || request.TimeoutSeconds != 25 {
+		t.Fatalf("draft refresh was not configured for the fast provider-independent path: %+v", request)
+	}
+
+	event.Body = `{"action":"put_snapshot","season":2026,"league_id":"79286","franchise_id":"0005"}`
+	response = handler.Handle(context.Background(), event)
+	if response.StatusCode != 400 {
+		t.Fatalf("injected action status = %d, want 400", response.StatusCode)
+	}
+}
+
 func TestHTTPHandlerMapsSnapshotQueries(t *testing.T) {
 	actions := &recordingActionHandler{result: Response{Action: ActionLatestSnapshot, Status: "ok"}}
 	handler, err := NewHTTPHandler(actions)

@@ -101,11 +101,12 @@ https://dynasty-ff.749rmw.com/auth/callback
 http://localhost:3000/auth/callback
 ```
 
-The HTTP boundary is intentionally read-only. It does not expose a generic action
-route, identity writes, snapshot writes, MFL sync, or identity sync. API Gateway
-validates the bearer token before these routes reach Lambda:
+The HTTP boundary exposes only explicit application workflows. It does not expose
+a generic action route, identity writes, arbitrary snapshot writes, or identity
+sync. API Gateway validates the bearer token before these routes reach Lambda:
 
 - `POST /v1/analyze`
+- `POST /v1/snapshots/sync`
 - `GET /v1/snapshots/latest`
 - `GET /v1/snapshots/at`
 
@@ -135,6 +136,11 @@ curl --fail-with-body \
 
 API errors intentionally omit internal storage and provider details. API Gateway
 access logs contain request metadata but not bearer tokens or request bodies.
+
+`POST /v1/snapshots/sync` is the draft-time refresh path. It always includes live
+draft data and skips FantasyPros calls so updating availability is fast and cannot
+be blocked by an optional provider. The request body contains only the league
+coordinates; after it succeeds, call `/v1/analyze` to analyze the new snapshot.
 
 Normalized league snapshots support `put_snapshot`, `latest_snapshot`, and
 `snapshot_at`. Snapshot objects are immutable and stored below:
