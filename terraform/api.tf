@@ -3,7 +3,7 @@ module "dynasty_ff_backend_apigateway" {
   version = "6.1.0"
 
   name               = "${local.name}-http"
-  description        = "Authenticated read-only dynasty football analysis API"
+  description        = "Authenticated dynasty football analysis API"
   protocol_type      = "HTTP"
   create_domain_name = false
 
@@ -57,6 +57,20 @@ module "dynasty_ff_backend_apigateway" {
     }
 
     "POST /v1/analyze" = {
+      authorization_type   = "JWT"
+      authorizer_key       = "jwt"
+      authorization_scopes = var.api_jwt_required_scopes
+
+      integration = {
+        uri                    = module.ff_backend_lambda.lambda_function_arn
+        payload_format_version = "2.0"
+        method                 = "POST"
+        type                   = "AWS_PROXY"
+        timeout_milliseconds   = 30000
+      }
+    }
+
+    "POST /v1/snapshots/sync" = {
       authorization_type   = "JWT"
       authorizer_key       = "jwt"
       authorization_scopes = var.api_jwt_required_scopes

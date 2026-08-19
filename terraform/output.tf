@@ -27,7 +27,7 @@ output "lambda_function_name" {
 }
 
 output "http_api_url" {
-  description = "Base URL for the authenticated read-only HTTP API"
+  description = "Base URL for the authenticated HTTP API"
   value       = module.dynasty_ff_backend_apigateway.api_endpoint
 }
 
@@ -35,7 +35,7 @@ output "http_api_routes" {
   description = "HTTP routes exposed by the API; only health is unauthenticated"
   value = {
     public        = ["GET /health"]
-    authenticated = ["GET /v1/snapshots/at", "GET /v1/snapshots/latest", "POST /v1/analyze"]
+    authenticated = ["GET /v1/snapshots/at", "GET /v1/snapshots/latest", "POST /v1/analyze", "POST /v1/snapshots/sync"]
   }
 }
 

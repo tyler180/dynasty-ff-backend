@@ -24,9 +24,9 @@ type ActionHandler interface {
 	Handle(context.Context, Request) (Response, error)
 }
 
-// HTTPHandler exposes a deliberately small read-only HTTP surface. API Gateway
-// owns authentication; this adapter owns route-to-action authorization so a
-// caller cannot smuggle a mutating Lambda action through an authenticated route.
+// HTTPHandler exposes a deliberately small HTTP surface. API Gateway owns
+// authentication; this adapter owns route-to-action authorization so a caller
+// cannot smuggle an arbitrary Lambda action through an authenticated route.
 type HTTPHandler struct {
 	actions ActionHandler
 }
@@ -54,6 +54,8 @@ func (h *HTTPHandler) Handle(ctx context.Context, event events.APIGatewayV2HTTPR
 		request = Request{Action: ActionHealth}
 	case http.MethodPost + " /v1/analyze":
 		request, err = decodeAnalyzeRequest(event)
+	case http.MethodPost + " /v1/snapshots/sync":
+		request, err = decodeSnapshotSyncRequest(event)
 	case http.MethodGet + " /v1/snapshots/latest":
 		request, err = decodeSnapshotRequest(ActionLatestSnapshot, event.QueryStringParameters)
 	case http.MethodGet + " /v1/snapshots/at":
@@ -83,40 +85,15 @@ type analyzeHTTPBody struct {
 	ProjectionFallback string             `json:"projection_fallback,omitempty"`
 }
 
+type snapshotSyncHTTPBody struct {
+	Season      int                `json:"season"`
+	LeagueID    league.ID          `json:"league_id"`
+	FranchiseID league.FranchiseID `json:"franchise_id"`
+}
+
 func decodeAnalyzeRequest(event events.APIGatewayV2HTTPRequest) (Request, error) {
-	contentType := strings.TrimSpace(event.Headers["content-type"])
-	if contentType == "" {
-		contentType = strings.TrimSpace(event.Headers["Content-Type"])
-	}
-	if contentType != "" {
-		mediaType, _, err := mime.ParseMediaType(contentType)
-		if err != nil || mediaType != "application/json" {
-			return Request{}, fmt.Errorf("content-type must be application/json")
-		}
-	}
-
-	body := []byte(event.Body)
-	if event.IsBase64Encoded {
-		decoded, err := base64.StdEncoding.DecodeString(event.Body)
-		if err != nil {
-			return Request{}, fmt.Errorf("body is not valid base64")
-		}
-		body = decoded
-	}
-	if len(body) == 0 {
-		return Request{}, fmt.Errorf("JSON body is required")
-	}
-	if len(body) > maxHTTPBodyBytes {
-		return Request{}, fmt.Errorf("request body exceeds 1 MiB")
-	}
-
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.DisallowUnknownFields()
 	var input analyzeHTTPBody
-	if err := decoder.Decode(&input); err != nil {
-		return Request{}, fmt.Errorf("invalid JSON body: %w", err)
-	}
-	if err := ensureJSONEOF(decoder); err != nil {
+	if err := decodeJSONBody(event, &input); err != nil {
 		return Request{}, err
 	}
 	if err := validateLeagueCoordinates(input.Season, input.LeagueID, input.FranchiseID); err != nil {
@@ -133,6 +110,60 @@ func decodeAnalyzeRequest(event events.APIGatewayV2HTTPRequest) (Request, error)
 		FranchiseID: input.FranchiseID, CapReliefTarget: input.CapReliefTarget,
 		ProjectionFallback: input.ProjectionFallback,
 	}, nil
+}
+
+func decodeSnapshotSyncRequest(event events.APIGatewayV2HTTPRequest) (Request, error) {
+	var input snapshotSyncHTTPBody
+	if err := decodeJSONBody(event, &input); err != nil {
+		return Request{}, err
+	}
+	if err := validateLeagueCoordinates(input.Season, input.LeagueID, input.FranchiseID); err != nil {
+		return Request{}, err
+	}
+	includeDraft := true
+	return Request{
+		Action: ActionSyncMFL, Season: input.Season, LeagueID: input.LeagueID,
+		FranchiseID: input.FranchiseID, IncludeDraft: &includeDraft, LiveDraft: true,
+		SkipFantasyPros: true, TimeoutSeconds: 25,
+	}, nil
+}
+
+func decodeJSONBody(event events.APIGatewayV2HTTPRequest, destination any) error {
+	contentType := strings.TrimSpace(event.Headers["content-type"])
+	if contentType == "" {
+		contentType = strings.TrimSpace(event.Headers["Content-Type"])
+	}
+	if contentType != "" {
+		mediaType, _, err := mime.ParseMediaType(contentType)
+		if err != nil || mediaType != "application/json" {
+			return fmt.Errorf("content-type must be application/json")
+		}
+	}
+
+	body := []byte(event.Body)
+	if event.IsBase64Encoded {
+		decoded, err := base64.StdEncoding.DecodeString(event.Body)
+		if err != nil {
+			return fmt.Errorf("body is not valid base64")
+		}
+		body = decoded
+	}
+	if len(body) == 0 {
+		return fmt.Errorf("JSON body is required")
+	}
+	if len(body) > maxHTTPBodyBytes {
+		return fmt.Errorf("request body exceeds 1 MiB")
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(destination); err != nil {
+		return fmt.Errorf("invalid JSON body: %w", err)
+	}
+	if err := ensureJSONEOF(decoder); err != nil {
+		return err
+	}
+	return nil
 }
 
 func decodeSnapshotRequest(action string, query map[string]string) (Request, error) {
