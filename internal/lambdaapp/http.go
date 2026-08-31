@@ -16,6 +16,8 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
+	"github.com/tyler180/dynasty-ff-backend/internal/features/history"
+	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
 )
 
 const maxHTTPBodyBytes = 1 << 20
@@ -60,6 +62,8 @@ func (h *HTTPHandler) Handle(ctx context.Context, event events.APIGatewayV2HTTPR
 		request, err = decodeSnapshotRequest(ActionLatestSnapshot, event.QueryStringParameters)
 	case http.MethodGet + " /v1/snapshots/at":
 		request, err = decodeSnapshotRequest(ActionSnapshotAt, event.QueryStringParameters)
+	case http.MethodGet + " /v1/players/snaps":
+		request, err = decodeSnapCountRequest(event.QueryStringParameters)
 	default:
 		return jsonHTTPResponse(http.StatusNotFound, errorBody{Error: "not_found", Message: "route not found"})
 	}
@@ -79,6 +83,33 @@ func (h *HTTPHandler) Handle(ctx context.Context, event events.APIGatewayV2HTTPR
 		status = http.StatusAccepted
 	}
 	return jsonHTTPResponse(status, response)
+}
+
+func decodeSnapCountRequest(query map[string]string) (Request, error) {
+	request := Request{Action: ActionGetSnapCounts}
+	for _, value := range strings.Split(query["player_ids"], ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			request.PlayerIDs = append(request.PlayerIDs, player.ID(value))
+		}
+	}
+	for _, value := range strings.Split(query["seasons"], ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			season, err := strconv.Atoi(value)
+			if err != nil {
+				return Request{}, fmt.Errorf("seasons must be comma-separated years")
+			}
+			request.Seasons = append(request.Seasons, season)
+		}
+	}
+	for _, value := range strings.Split(query["position_groups"], ",") {
+		if value = strings.ToUpper(strings.TrimSpace(value)); value != "" {
+			request.PositionGroups = append(request.PositionGroups, value)
+		}
+	}
+	if err := (history.SnapQuery{PlayerIDs: request.PlayerIDs, Seasons: request.Seasons, PositionGroups: request.PositionGroups}).Validate(); err != nil {
+		return Request{}, err
+	}
+	return request, nil
 }
 
 type analyzeHTTPBody struct {

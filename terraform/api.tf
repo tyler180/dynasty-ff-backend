@@ -28,6 +28,20 @@ module "dynasty_ff_backend_apigateway" {
   }
 
   routes = {
+    "GET /v1/players/snaps" = {
+      authorization_type   = "JWT"
+      authorizer_key       = "jwt"
+      authorization_scopes = var.api_jwt_required_scopes
+
+      integration = {
+        uri                    = module.ff_backend_lambda.lambda_function_arn
+        payload_format_version = "2.0"
+        method                 = "POST"
+        type                   = "AWS_PROXY"
+        timeout_milliseconds   = 30000
+      }
+    }
+
     "GET /v1/snapshots/at" = {
       authorization_type   = "JWT"
       authorizer_key       = "jwt"

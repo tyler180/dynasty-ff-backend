@@ -15,14 +15,17 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
+	"github.com/tyler180/dynasty-ff-backend/internal/app/snapcountsync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/snapshotanalysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/lambdaapp"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/dynastyprocess"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/fantasypros"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/mflcredentials"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/mflidentity"
+	"github.com/tyler180/dynasty-ff-backend/internal/provider/nflverse"
 	"github.com/tyler180/dynasty-ff-backend/internal/storage/dynamodbidentity"
 	"github.com/tyler180/dynasty-ff-backend/internal/storage/s3leaguestore"
+	"github.com/tyler180/dynasty-ff-backend/internal/storage/s3snapstore"
 )
 
 func main() {
@@ -55,6 +58,10 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 		return nil, err
 	}
 	snapshots, err := s3leaguestore.NewFromConfig(awsConfig, bucketName)
+	if err != nil {
+		return nil, err
+	}
+	snapCounts, err := s3snapstore.NewFromConfig(awsConfig, bucketName)
 	if err != nil {
 		return nil, err
 	}
@@ -95,6 +102,15 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 		RelevantPlayers: mflidentity.Source{MCPCommand: mcpCommand, Credentials: credentials},
 	})
 	handler.WithAnalyzer(snapshotanalysis.Service{Snapshots: snapshots, Players: identities})
+	snapCountsURL := strings.TrimSpace(os.Getenv("SNAP_COUNTS_URL_TEMPLATE"))
+	if snapCountsURL == "" {
+		snapCountsURL = nflverse.DefaultSnapCountsURLTemplate
+	}
+	snapSource, err := nflverse.NewDefault(snapCountsURL)
+	if err != nil {
+		return nil, err
+	}
+	handler.WithSnapCounts(snapcountsync.Service{Source: snapSource, Identities: identities, Snaps: snapCounts}, snapCounts)
 	handler.WithSyncStarter(lambdaSyncStarter{
 		client: awslambda.NewFromConfig(awsConfig), functionName: os.Getenv("AWS_LAMBDA_FUNCTION_NAME"),
 	})
