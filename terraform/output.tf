@@ -35,7 +35,7 @@ output "http_api_routes" {
   description = "HTTP routes exposed by the API; only health is unauthenticated"
   value = {
     public        = ["GET /health"]
-    authenticated = ["GET /v1/snapshots/at", "GET /v1/snapshots/latest", "POST /v1/analyze", "POST /v1/snapshots/sync"]
+    authenticated = ["GET /v1/players/snaps", "GET /v1/snapshots/at", "GET /v1/snapshots/latest", "POST /v1/analyze", "POST /v1/snapshots/sync"]
   }
 }
 

@@ -9,8 +9,10 @@ import (
 
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
+	"github.com/tyler180/dynasty-ff-backend/internal/app/snapcountsync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/snapshotanalysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
+	"github.com/tyler180/dynasty-ff-backend/internal/features/history"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
 	"github.com/tyler180/dynasty-ff-backend/internal/storage/leaguestore"
@@ -29,6 +31,8 @@ const (
 	ActionSyncIdentities = "sync_identities"
 	ActionStartMFLSync   = "start_mfl_sync"
 	ActionSyncMFL        = "sync_mfl"
+	ActionSyncSnapCounts = "sync_snap_counts"
+	ActionGetSnapCounts  = "get_snap_counts"
 	ActionAnalyze        = "analyze"
 )
 
@@ -53,19 +57,24 @@ type Request struct {
 	Workers            int                `json:"workers,omitempty"`
 	CapReliefTarget    float64            `json:"cap_relief_target,omitempty"`
 	ProjectionFallback string             `json:"projection_fallback,omitempty"`
+	PlayerIDs          []player.ID        `json:"player_ids,omitempty"`
+	Seasons            []int              `json:"seasons,omitempty"`
+	PositionGroups     []string           `json:"position_groups,omitempty"`
 }
 
 type Response struct {
-	Action        string                   `json:"action"`
-	Status        string                   `json:"status"`
-	Snapshot      *league.Snapshot         `json:"snapshot,omitempty"`
-	Player        *player.Profile          `json:"player,omitempty"`
-	Warnings      []string                 `json:"warnings,omitempty"`
-	SyncedAt      *time.Time               `json:"synced_at,omitempty"`
-	StoredPlayers int                      `json:"stored_players,omitempty"`
-	StoredAliases int                      `json:"stored_aliases,omitempty"`
-	IdentitySync  *identitysync.Result     `json:"identity_sync,omitempty"`
-	Analysis      *snapshotanalysis.Result `json:"analysis,omitempty"`
+	Action        string                    `json:"action"`
+	Status        string                    `json:"status"`
+	Snapshot      *league.Snapshot          `json:"snapshot,omitempty"`
+	Player        *player.Profile           `json:"player,omitempty"`
+	Warnings      []string                  `json:"warnings,omitempty"`
+	SyncedAt      *time.Time                `json:"synced_at,omitempty"`
+	StoredPlayers int                       `json:"stored_players,omitempty"`
+	StoredAliases int                       `json:"stored_aliases,omitempty"`
+	IdentitySync  *identitysync.Result      `json:"identity_sync,omitempty"`
+	SnapCountSync *snapcountsync.Result     `json:"snap_count_sync,omitempty"`
+	SnapCounts    []history.PlayerGameSnaps `json:"snap_counts,omitempty"`
+	Analysis      *snapshotanalysis.Result  `json:"analysis,omitempty"`
 }
 
 type Syncer interface {
@@ -84,13 +93,19 @@ type Analyzer interface {
 	Analyze(context.Context, snapshotanalysis.Request) (snapshotanalysis.Result, error)
 }
 
+type SnapCountSyncer interface {
+	Sync(context.Context, snapcountsync.Request) (snapcountsync.Result, error)
+}
+
 type Handler struct {
-	snapshots      leaguestore.Repository
-	identities     identity.Repository
-	syncer         Syncer
-	syncStarter    SyncStarter
-	identitySyncer IdentitySyncer
-	analyzer       Analyzer
+	snapshots       leaguestore.Repository
+	identities      identity.Repository
+	syncer          Syncer
+	syncStarter     SyncStarter
+	identitySyncer  IdentitySyncer
+	snapCountSyncer SnapCountSyncer
+	snapCounts      history.SnapReader
+	analyzer        Analyzer
 }
 
 func (h *Handler) WithAnalyzer(analyzer Analyzer) *Handler {
@@ -110,6 +125,12 @@ func (h *Handler) WithSyncStarter(starter SyncStarter) *Handler {
 
 func (h *Handler) WithIdentitySyncer(syncer IdentitySyncer) *Handler {
 	h.identitySyncer = syncer
+	return h
+}
+
+func (h *Handler) WithSnapCounts(syncer SnapCountSyncer, reader history.SnapReader) *Handler {
+	h.snapCountSyncer = syncer
+	h.snapCounts = reader
 	return h
 }
 
@@ -254,6 +275,30 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 			return Response{}, err
 		}
 		return Response{Action: action, Status: "accepted"}, nil
+	case ActionSyncSnapCounts:
+		if h.snapCountSyncer == nil {
+			return Response{}, fmt.Errorf("snap-count sync is not configured")
+		}
+		result, err := h.snapCountSyncer.Sync(ctx, snapcountsync.Request{Season: request.Season})
+		if err != nil {
+			return Response{}, err
+		}
+		return Response{Action: action, Status: "stored", SnapCountSync: &result}, nil
+	case ActionGetSnapCounts:
+		if h.snapCounts == nil {
+			return Response{}, fmt.Errorf("snap-count repository is not configured")
+		}
+		seasons := request.Seasons
+		if len(seasons) == 0 && request.Season != 0 {
+			seasons = []int{request.Season}
+		}
+		records, err := h.snapCounts.PlayerGameSnaps(ctx, history.SnapQuery{
+			PlayerIDs: request.PlayerIDs, Seasons: seasons, PositionGroups: request.PositionGroups,
+		})
+		if err != nil {
+			return Response{}, err
+		}
+		return Response{Action: action, Status: "ok", SnapCounts: records}, nil
 	case ActionAnalyze:
 		if h.analyzer == nil {
 			return Response{}, fmt.Errorf("analysis is not configured")

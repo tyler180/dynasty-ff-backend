@@ -3,6 +3,8 @@ package history
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
@@ -16,7 +18,8 @@ type PlayerGameSnaps struct {
 	GameID           string    `json:"game_id"`
 	Season           int       `json:"season"`
 	Week             int       `json:"week"`
-	GameDate         time.Time `json:"game_date"`
+	GameDate         time.Time `json:"game_date,omitzero"`
+	GameType         string    `json:"game_type,omitempty"`
 	Team             string    `json:"team"`
 	Opponent         string    `json:"opponent"`
 	Position         string    `json:"position"`
@@ -31,10 +34,59 @@ type PlayerGameSnaps struct {
 	IngestionRunID   string    `json:"ingestion_run_id"`
 }
 
+func (s PlayerGameSnaps) Validate() error {
+	if strings.TrimSpace(string(s.PlayerID)) == "" || strings.TrimSpace(s.GameID) == "" {
+		return fmt.Errorf("player ID and game ID are required")
+	}
+	if s.Season < 2012 || s.Season > 2100 || s.Week < 1 || s.Week > 25 {
+		return fmt.Errorf("snap season or week is invalid")
+	}
+	if s.OffenseSnaps < 0 || s.DefenseSnaps < 0 || s.SpecialTeamSnaps < 0 {
+		return fmt.Errorf("snap counts cannot be negative")
+	}
+	for _, percentage := range []float64{s.OffenseSnapPct, s.DefenseSnapPct, s.SpecialTeamPct} {
+		if percentage < 0 || percentage > 1 {
+			return fmt.Errorf("snap percentages must be between 0 and 1")
+		}
+	}
+	if strings.TrimSpace(s.Source) == "" {
+		return fmt.Errorf("snap source is required")
+	}
+	return nil
+}
+
 type SnapQuery struct {
 	PlayerIDs      []player.ID
 	Seasons        []int
 	PositionGroups []string
+}
+
+func (q SnapQuery) Validate() error {
+	if len(q.PlayerIDs) == 0 {
+		return fmt.Errorf("at least one player ID is required")
+	}
+	if len(q.PlayerIDs) > 100 {
+		return fmt.Errorf("no more than 100 player IDs can be queried at once")
+	}
+	if len(q.Seasons) == 0 {
+		return fmt.Errorf("at least one season is required")
+	}
+	if len(q.Seasons) > 10 {
+		return fmt.Errorf("no more than 10 seasons can be queried at once")
+	}
+	for _, season := range q.Seasons {
+		if season < 2012 || season > 2100 {
+			return fmt.Errorf("snap season is invalid")
+		}
+	}
+	for _, group := range q.PositionGroups {
+		switch strings.ToUpper(strings.TrimSpace(group)) {
+		case "DL", "LB", "DB":
+		default:
+			return fmt.Errorf("position groups must be DL, LB, or DB")
+		}
+	}
+	return nil
 }
 
 type SnapReader interface {

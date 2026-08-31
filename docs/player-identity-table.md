@@ -53,8 +53,12 @@ dynamodb:GetItem
 dynamodb:PutItem
 ```
 
-Batch and transactional permissions can be added when the nflverse importer is
-implemented. They are not needed by the current repository.
+`sync_identities` and the nflverse snap importer use `dynamodb:BatchGetItem` to
+resolve provider aliases efficiently. Transactional permissions are not needed.
+
+PFR aliases imported by `sync_identities` are also used to resolve nflverse
+snap-count rows to canonical player IDs. Run identity sync before
+`sync_snap_counts`; unresolved PFR IDs are reported and are not matched by name.
 
 The table should use point-in-time recovery and encryption at rest. On-demand
 capacity is a reasonable initial setting for manually triggered, low-volume

@@ -94,6 +94,25 @@ func TestHTTPHandlerMapsSnapshotQueries(t *testing.T) {
 	}
 }
 
+func TestHTTPHandlerMapsDefensiveSnapQuery(t *testing.T) {
+	actions := &recordingActionHandler{result: Response{Action: ActionGetSnapCounts, Status: "ok"}}
+	handler, err := NewHTTPHandler(actions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := httpEvent("GET", "/v1/players/snaps")
+	event.QueryStringParameters = map[string]string{
+		"player_ids": "player-1,player-2", "seasons": "2024,2025", "position_groups": "lb,db",
+	}
+	response := handler.Handle(context.Background(), event)
+	if response.StatusCode != 200 || actions.request.Action != ActionGetSnapCounts {
+		t.Fatalf("response/request = %+v / %+v", response, actions.request)
+	}
+	if len(actions.request.PlayerIDs) != 2 || len(actions.request.Seasons) != 2 || actions.request.PositionGroups[0] != "LB" {
+		t.Fatalf("request = %+v", actions.request)
+	}
+}
+
 func TestHTTPHandlerRequiresSnapshotAtTimestamp(t *testing.T) {
 	actions := &recordingActionHandler{}
 	handler, err := NewHTTPHandler(actions)

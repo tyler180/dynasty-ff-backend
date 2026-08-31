@@ -13,6 +13,7 @@ analysis remains in `dynasty-ff-models` and is consumed through its public
 - `cmd/lambda`: AWS Lambda persistence handler
 - `internal/provider/mfl`: MFL MCP adapter and normalization
 - `internal/app/snapshotanalysis`: stored-fact adapter for the public analysis API
+- `internal/app/snapcountsync`: PFR/nflverse defensive snap-count ingestion
 - `internal/identity`: canonical player identity contracts
 - `internal/storage`: persistence adapters
 - `internal/draftadapter`: conversion into the model's public input API
@@ -236,6 +237,47 @@ unavailable or rate limited. The stored snapshot will use MFL rosters, draft
 state, league-scored history, rookie ADP, and the actual free-agent pool. When
 the flag is omitted, FantasyPros enrichment is attempted but provider failures
 produce a warning instead of aborting the MFL sync.
+
+## Defensive snap participation
+
+Run `sync_identities` first so PFR aliases resolve to canonical player IDs, then
+import one season of game-level snap facts from nflverse:
+
+```json
+{
+  "action": "sync_snap_counts",
+  "season": 2025
+}
+```
+
+The sync stores defensive snaps and defensive-snap percentage for defensive
+players in the versioned league-data bucket at
+`snap-counts/<season>/latest.json`. Percentages are fractions from 0 through 1,
+so `0.83` represents 83%. The response reports unresolved PFR player IDs rather
+than guessing identity matches.
+
+Canonical players can be queried directly through the Lambda action:
+
+```json
+{
+  "action": "get_snap_counts",
+  "player_ids": ["player-canonical-id"],
+  "seasons": [2024, 2025],
+  "position_groups": ["LB"]
+}
+```
+
+The authenticated API exposes the same query as:
+
+```text
+GET /v1/players/snaps?player_ids=player-canonical-id&seasons=2024,2025&position_groups=LB
+```
+
+Results remain game-level facts so a future model can calculate rolling or
+weighted trends from snap totals instead of averaging percentages across games.
+The source dataset is provided by the
+[nflverse data project](https://github.com/nflverse/nflverse-data) under
+CC-BY-4.0 and is derived from Pro Football Reference game-level snap counts.
 
 Analyze the latest stored snapshot by joining its canonical roster IDs to the
 player profiles in DynamoDB:

@@ -22,6 +22,7 @@ data "aws_iam_policy_document" "lambda_policy_doc" {
     ]
     resources = [
       "${module.backend_bucket.s3_bucket_arn}/snapshots/*",
+      "${module.backend_bucket.s3_bucket_arn}/snap-counts/*",
     ]
   }
 

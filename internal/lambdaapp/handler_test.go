@@ -7,8 +7,10 @@ import (
 
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
+	"github.com/tyler180/dynasty-ff-backend/internal/app/snapcountsync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/snapshotanalysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
+	"github.com/tyler180/dynasty-ff-backend/internal/features/history"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
 	source "github.com/tyler180/dynasty-ff-models/analysis"
@@ -39,6 +41,21 @@ type fakeIdentitySyncer struct{ result identitysync.Result }
 type fakeSyncStarter struct{ request *Request }
 
 type fakeAnalyzer struct{ result snapshotanalysis.Result }
+
+type fakeSnapCounts struct {
+	result     []history.PlayerGameSnaps
+	syncResult snapcountsync.Result
+	query      history.SnapQuery
+}
+
+func (f *fakeSnapCounts) Sync(context.Context, snapcountsync.Request) (snapcountsync.Result, error) {
+	return f.syncResult, nil
+}
+
+func (f *fakeSnapCounts) PlayerGameSnaps(_ context.Context, query history.SnapQuery) ([]history.PlayerGameSnaps, error) {
+	f.query = query
+	return f.result, nil
+}
 
 func (f fakeAnalyzer) Analyze(context.Context, snapshotanalysis.Request) (snapshotanalysis.Result, error) {
 	return f.result, nil
@@ -249,5 +266,30 @@ func TestHandlerAnalyzesLatestSnapshot(t *testing.T) {
 	}
 	if response.Status != "ok" || response.Analysis == nil || response.Analysis.Analysis.Team != "Team McLean" {
 		t.Fatalf("response = %+v", response)
+	}
+}
+
+func TestHandlerSyncsAndReadsDefensiveSnapCounts(t *testing.T) {
+	handler, err := New(&fakeSnapshots{}, &fakeIdentities{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	snaps := &fakeSnapCounts{
+		syncResult: snapcountsync.Result{Season: 2025, StoredRecords: 1},
+		result:     []history.PlayerGameSnaps{{PlayerID: "player-1", Season: 2025, Week: 1, GameID: "game-1", DefenseSnapPct: 0.83, Source: "nflverse-pfr"}},
+	}
+	handler.WithSnapCounts(snaps, snaps)
+	response, err := handler.Handle(context.Background(), Request{Action: ActionSyncSnapCounts, Season: 2025})
+	if err != nil || response.SnapCountSync == nil || response.SnapCountSync.StoredRecords != 1 {
+		t.Fatalf("sync response/error = %+v / %v", response, err)
+	}
+	response, err = handler.Handle(context.Background(), Request{
+		Action: ActionGetSnapCounts, PlayerIDs: []player.ID{"player-1"}, Seasons: []int{2025}, PositionGroups: []string{"LB"},
+	})
+	if err != nil || len(response.SnapCounts) != 1 || response.SnapCounts[0].DefenseSnapPct != 0.83 {
+		t.Fatalf("query response/error = %+v / %v", response, err)
+	}
+	if len(snaps.query.PlayerIDs) != 1 || snaps.query.PlayerIDs[0] != "player-1" {
+		t.Fatalf("query = %+v", snaps.query)
 	}
 }
