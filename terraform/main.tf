@@ -105,10 +105,9 @@ module "ff_backend_build" {
     ]
   })
 
-  use_image_tag = false # If false, sha of the image will be used
-
-  # use_image_tag = true
-  # image_tag   = "2.0"
+  # use_image_tag = false # If false, sha of the image will be used
+  use_image_tag = true
+  image_tag     = "1.0"
 
   source_path      = local.source_path
   docker_file_path = "${local.source_path}/dynasty-ff-backend/Dockerfile"
