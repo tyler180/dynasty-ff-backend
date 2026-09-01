@@ -256,6 +256,11 @@ players in the versioned league-data bucket at
 so `0.83` represents 83%. The response reports unresolved PFR player IDs rather
 than guessing identity matches.
 
+Each fact also stores the corresponding team's defensive snap total, derived
+from the highest-participation player row for that game and team. Downstream
+models can therefore aggregate usage as `sum(player snaps) / sum(team snaps)`
+instead of averaging rounded game percentages.
+
 Canonical players can be queried directly through the Lambda action:
 
 ```json

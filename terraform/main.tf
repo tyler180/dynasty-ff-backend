@@ -19,6 +19,7 @@ locals {
     "dynasty-ff-models/docs/**",
     "dynasty-ff-models/draft/**",
     "dynasty-ff-models/internal/**",
+    "dynasty-ff-models/usage/**",
     "mfl/mfl-mcp/cmd/**",
     "mfl/mfl-mcp/internal/**",
   ]
