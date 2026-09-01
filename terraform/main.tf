@@ -59,6 +59,7 @@ module "ff_backend_lambda" {
     LEAGUE_DATA_BUCKET       = module.backend_bucket.s3_bucket_id
     MFL_MCP_COMMAND          = "/var/task/mfl-mcp"
     MFL_SECRET_ARN           = module.secrets_manager.secret_arn
+    MFL_YEAR                 = "2026"
     IDENTITY_SOURCE_URL      = "https://raw.githubusercontent.com/DynastyProcess/data/master/files/db_playerids.csv"
     SNAP_COUNTS_URL_TEMPLATE = "https://github.com/nflverse/nflverse-data/releases/download/snap_counts/snap_counts_%d.csv"
   }

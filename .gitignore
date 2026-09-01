@@ -6,3 +6,4 @@ analyze-results.json
 analyze-results-*.json
 rookies.json
 *.bak
+set-local-env-vars.sh
