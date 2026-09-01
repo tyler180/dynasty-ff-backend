@@ -43,18 +43,16 @@ module "secrets_manager" {
     fantasypros_api_key = var.fantasypros_api_key,
     league_id           = var.league_id,
     franchise_id        = var.franchise_id,
-    league_year         = var.league_year,
-    json                = var.setjson,
-    xml                 = var.setxml
+    league_year         = var.league_year
   })
 
   tags = local.tags
 }
 
-import {
-  to = module.secrets_manager.aws_secretsmanager_secret.this[0]
-  id = "arn:aws:secretsmanager:us-west-2:138013422358:secret:mfl-secrets20250905223506929400000001-OemB5C"
-}
+# import {
+#   to = module.secrets_manager.aws_secretsmanager_secret.this[0]
+#   id = "arn:aws:secretsmanager:us-west-2:138013422358:secret:mfl-secrets20250905223506929400000001-OemB5C"
+# }
 # resource "aws_secretsmanager_secret" "mfl" {
 #   name                    = "${local.name}/mfl-read-only"
 #   description             = "Read-only MyFantasyLeague API credentials"
