@@ -74,27 +74,6 @@ variable "api_access_log_retention_days" {
   default     = 30
 }
 
-# variable "password" {
-#   type = string
-# }
-
-# variable "api_key" {
-#   type = string
-# }
-
-# variable "league_id" {
-#   type = string
-# }
-
-# variable "franchise_id" {
-#   type = string
-# }
-
-# variable "league_year" {
-#   type    = string
-#   default = "2026"
-# }
-
 variable "username" {
   sensitive = true
   type      = string
@@ -126,14 +105,4 @@ variable "franchise_id" {
 variable "league_year" {
   type    = string
   default = "2025"
-}
-
-variable "setjson" {
-  type    = string
-  default = "1"
-}
-
-variable "setxml" {
-  type    = string
-  default = "0"
 }
