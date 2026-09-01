@@ -64,6 +64,8 @@ func (h *HTTPHandler) Handle(ctx context.Context, event events.APIGatewayV2HTTPR
 		request, err = decodeSnapshotRequest(ActionSnapshotAt, event.QueryStringParameters)
 	case http.MethodGet + " /v1/players/snaps":
 		request, err = decodeSnapCountRequest(event.QueryStringParameters)
+	case http.MethodGet + " /v1/free-agents/defensive-trends":
+		request, err = decodeDefensiveFreeAgentTrendRequest(event.QueryStringParameters)
 	default:
 		return jsonHTTPResponse(http.StatusNotFound, errorBody{Error: "not_found", Message: "route not found"})
 	}
@@ -108,6 +110,34 @@ func decodeSnapCountRequest(query map[string]string) (Request, error) {
 	}
 	if err := (history.SnapQuery{PlayerIDs: request.PlayerIDs, Seasons: request.Seasons, PositionGroups: request.PositionGroups}).Validate(); err != nil {
 		return Request{}, err
+	}
+	return request, nil
+}
+
+func decodeDefensiveFreeAgentTrendRequest(query map[string]string) (Request, error) {
+	season, err := strconv.Atoi(strings.TrimSpace(query["season"]))
+	if err != nil || season < 2000 || season > 2100 {
+		return Request{}, fmt.Errorf("season must be between 2000 and 2100")
+	}
+	leagueID := league.ID(strings.TrimSpace(query["league_id"]))
+	if leagueID == "" {
+		return Request{}, fmt.Errorf("league_id is required")
+	}
+	request := Request{Action: ActionTopDefensiveFreeAgentTrends, Season: season, LeagueID: leagueID}
+	for _, value := range strings.Split(query["seasons"], ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			snapSeason, parseErr := strconv.Atoi(value)
+			if parseErr != nil || snapSeason < 2012 || snapSeason > 2100 {
+				return Request{}, fmt.Errorf("seasons must be comma-separated years")
+			}
+			request.Seasons = append(request.Seasons, snapSeason)
+		}
+	}
+	if value := strings.TrimSpace(query["limit"]); value != "" {
+		request.Limit, err = strconv.Atoi(value)
+		if err != nil || request.Limit < 1 || request.Limit > 50 {
+			return Request{}, fmt.Errorf("limit must be between 1 and 50")
+		}
 	}
 	return request, nil
 }

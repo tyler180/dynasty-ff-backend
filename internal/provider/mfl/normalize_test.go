@@ -101,3 +101,26 @@ func TestLeaguePlayerIDsCombinesRostersAndFreeAgents(t *testing.T) {
 		t.Fatalf("player IDs = %v, want %v", got, want)
 	}
 }
+
+func TestDefensiveFreeAgentsJoinsCatalogAndFiltersPositions(t *testing.T) {
+	players := map[string]any{"players": map[string]any{"player": []any{
+		map[string]any{"id": "100", "name": "Campbell, Jihaad", "position": "LB", "team": "PHI"},
+		map[string]any{"id": "200", "name": "Wilson, Tyree", "position": "DE", "team": "LV"},
+		map[string]any{"id": "300", "name": "Receiver, Example", "position": "WR", "team": "DEN"},
+		map[string]any{"id": "400", "name": "Rostered, Safety", "position": "S", "team": "SEA"},
+	}}}
+	freeAgents := map[string]any{"freeAgents": map[string]any{"leagueUnit": map[string]any{"player": []any{
+		map[string]any{"id": "300"}, map[string]any{"id": "200"}, map[string]any{"id": "100"},
+	}}}}
+
+	got := DefensiveFreeAgents(players, freeAgents)
+	if len(got) != 2 {
+		t.Fatalf("defensive free agents = %+v", got)
+	}
+	if got[0].MFLID != "100" || got[0].Name != "Jihaad Campbell" || got[0].PositionGroup != "LB" {
+		t.Fatalf("first defensive free agent = %+v", got[0])
+	}
+	if got[1].MFLID != "200" || got[1].PositionGroup != "DL" {
+		t.Fatalf("second defensive free agent = %+v", got[1])
+	}
+}

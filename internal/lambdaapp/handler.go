@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tyler180/dynasty-ff-backend/internal/app/freeagenttrends"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/snapcountsync"
@@ -19,21 +20,22 @@ import (
 )
 
 const (
-	ActionHealth         = "health"
-	ActionPutSnapshot    = "put_snapshot"
-	ActionLatestSnapshot = "latest_snapshot"
-	ActionSnapshotAt     = "snapshot_at"
-	ActionPutPlayer      = "put_player"
-	ActionPutAlias       = "put_alias"
-	ActionGetPlayer      = "get_player"
-	ActionResolvePlayer  = "resolve_player"
-	ActionPutIdentities  = "put_identities"
-	ActionSyncIdentities = "sync_identities"
-	ActionStartMFLSync   = "start_mfl_sync"
-	ActionSyncMFL        = "sync_mfl"
-	ActionSyncSnapCounts = "sync_snap_counts"
-	ActionGetSnapCounts  = "get_snap_counts"
-	ActionAnalyze        = "analyze"
+	ActionHealth                      = "health"
+	ActionPutSnapshot                 = "put_snapshot"
+	ActionLatestSnapshot              = "latest_snapshot"
+	ActionSnapshotAt                  = "snapshot_at"
+	ActionPutPlayer                   = "put_player"
+	ActionPutAlias                    = "put_alias"
+	ActionGetPlayer                   = "get_player"
+	ActionResolvePlayer               = "resolve_player"
+	ActionPutIdentities               = "put_identities"
+	ActionSyncIdentities              = "sync_identities"
+	ActionStartMFLSync                = "start_mfl_sync"
+	ActionSyncMFL                     = "sync_mfl"
+	ActionSyncSnapCounts              = "sync_snap_counts"
+	ActionGetSnapCounts               = "get_snap_counts"
+	ActionTopDefensiveFreeAgentTrends = "top_defensive_free_agent_trends"
+	ActionAnalyze                     = "analyze"
 )
 
 type Request struct {
@@ -60,21 +62,23 @@ type Request struct {
 	PlayerIDs          []player.ID        `json:"player_ids,omitempty"`
 	Seasons            []int              `json:"seasons,omitempty"`
 	PositionGroups     []string           `json:"position_groups,omitempty"`
+	Limit              int                `json:"limit,omitempty"`
 }
 
 type Response struct {
-	Action        string                    `json:"action"`
-	Status        string                    `json:"status"`
-	Snapshot      *league.Snapshot          `json:"snapshot,omitempty"`
-	Player        *player.Profile           `json:"player,omitempty"`
-	Warnings      []string                  `json:"warnings,omitempty"`
-	SyncedAt      *time.Time                `json:"synced_at,omitempty"`
-	StoredPlayers int                       `json:"stored_players,omitempty"`
-	StoredAliases int                       `json:"stored_aliases,omitempty"`
-	IdentitySync  *identitysync.Result      `json:"identity_sync,omitempty"`
-	SnapCountSync *snapcountsync.Result     `json:"snap_count_sync,omitempty"`
-	SnapCounts    []history.PlayerGameSnaps `json:"snap_counts,omitempty"`
-	Analysis      *snapshotanalysis.Result  `json:"analysis,omitempty"`
+	Action                   string                    `json:"action"`
+	Status                   string                    `json:"status"`
+	Snapshot                 *league.Snapshot          `json:"snapshot,omitempty"`
+	Player                   *player.Profile           `json:"player,omitempty"`
+	Warnings                 []string                  `json:"warnings,omitempty"`
+	SyncedAt                 *time.Time                `json:"synced_at,omitempty"`
+	StoredPlayers            int                       `json:"stored_players,omitempty"`
+	StoredAliases            int                       `json:"stored_aliases,omitempty"`
+	IdentitySync             *identitysync.Result      `json:"identity_sync,omitempty"`
+	SnapCountSync            *snapcountsync.Result     `json:"snap_count_sync,omitempty"`
+	SnapCounts               []history.PlayerGameSnaps `json:"snap_counts,omitempty"`
+	DefensiveFreeAgentTrends *freeagenttrends.Result   `json:"defensive_free_agent_trends,omitempty"`
+	Analysis                 *snapshotanalysis.Result  `json:"analysis,omitempty"`
 }
 
 type Syncer interface {
@@ -97,6 +101,10 @@ type SnapCountSyncer interface {
 	Sync(context.Context, snapcountsync.Request) (snapcountsync.Result, error)
 }
 
+type FreeAgentTrendAnalyzer interface {
+	Analyze(context.Context, freeagenttrends.Request) (freeagenttrends.Result, error)
+}
+
 type Handler struct {
 	snapshots       leaguestore.Repository
 	identities      identity.Repository
@@ -105,6 +113,7 @@ type Handler struct {
 	identitySyncer  IdentitySyncer
 	snapCountSyncer SnapCountSyncer
 	snapCounts      history.SnapReader
+	freeAgentTrends FreeAgentTrendAnalyzer
 	analyzer        Analyzer
 }
 
@@ -131,6 +140,11 @@ func (h *Handler) WithIdentitySyncer(syncer IdentitySyncer) *Handler {
 func (h *Handler) WithSnapCounts(syncer SnapCountSyncer, reader history.SnapReader) *Handler {
 	h.snapCountSyncer = syncer
 	h.snapCounts = reader
+	return h
+}
+
+func (h *Handler) WithFreeAgentTrends(analyzer FreeAgentTrendAnalyzer) *Handler {
+	h.freeAgentTrends = analyzer
 	return h
 }
 
@@ -299,6 +313,17 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 			return Response{}, err
 		}
 		return Response{Action: action, Status: "ok", SnapCounts: records}, nil
+	case ActionTopDefensiveFreeAgentTrends:
+		if h.freeAgentTrends == nil {
+			return Response{}, fmt.Errorf("defensive free-agent trend analysis is not configured")
+		}
+		result, err := h.freeAgentTrends.Analyze(ctx, freeagenttrends.Request{
+			Year: request.Season, LeagueID: string(request.LeagueID), Seasons: request.Seasons, Limit: request.Limit,
+		})
+		if err != nil {
+			return Response{}, err
+		}
+		return Response{Action: action, Status: "ok", DefensiveFreeAgentTrends: &result}, nil
 	case ActionAnalyze:
 		if h.analyzer == nil {
 			return Response{}, fmt.Errorf("analysis is not configured")

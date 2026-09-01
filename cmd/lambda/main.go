@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	awslambda "github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/tyler180/dynasty-ff-backend/internal/app/freeagenttrends"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/snapcountsync"
@@ -21,6 +22,7 @@ import (
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/dynastyprocess"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/fantasypros"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/mflcredentials"
+	"github.com/tyler180/dynasty-ff-backend/internal/provider/mflfreeagents"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/mflidentity"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/nflverse"
 	"github.com/tyler180/dynasty-ff-backend/internal/storage/dynamodbidentity"
@@ -111,6 +113,10 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 		return nil, err
 	}
 	handler.WithSnapCounts(snapcountsync.Service{Source: snapSource, Identities: identities, Snaps: snapCounts}, snapCounts)
+	handler.WithFreeAgentTrends(freeagenttrends.Service{
+		FreeAgents: mflfreeagents.Source{MCPCommand: mcpCommand, Credentials: credentials},
+		Identities: identities, Snaps: snapCounts,
+	})
 	handler.WithSyncStarter(lambdaSyncStarter{
 		client: awslambda.NewFromConfig(awsConfig), functionName: os.Getenv("AWS_LAMBDA_FUNCTION_NAME"),
 	})
