@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tyler180/dynasty-ff-backend/internal/app/freeagenttrends"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/snapcountsync"
@@ -42,6 +43,11 @@ type fakeSyncStarter struct{ request *Request }
 
 type fakeAnalyzer struct{ result snapshotanalysis.Result }
 
+type fakeFreeAgentTrendAnalyzer struct {
+	result  freeagenttrends.Result
+	request *freeagenttrends.Request
+}
+
 type fakeSnapCounts struct {
 	result     []history.PlayerGameSnaps
 	syncResult snapcountsync.Result
@@ -58,6 +64,13 @@ func (f *fakeSnapCounts) PlayerGameSnaps(_ context.Context, query history.SnapQu
 }
 
 func (f fakeAnalyzer) Analyze(context.Context, snapshotanalysis.Request) (snapshotanalysis.Result, error) {
+	return f.result, nil
+}
+
+func (f fakeFreeAgentTrendAnalyzer) Analyze(_ context.Context, request freeagenttrends.Request) (freeagenttrends.Result, error) {
+	if f.request != nil {
+		*f.request = request
+	}
 	return f.result, nil
 }
 
@@ -291,5 +304,30 @@ func TestHandlerSyncsAndReadsDefensiveSnapCounts(t *testing.T) {
 	}
 	if len(snaps.query.PlayerIDs) != 1 || snaps.query.PlayerIDs[0] != "player-1" {
 		t.Fatalf("query = %+v", snaps.query)
+	}
+}
+
+func TestHandlerReturnsTopDefensiveFreeAgentTrends(t *testing.T) {
+	handler, err := New(&fakeSnapshots{}, &fakeIdentities{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var captured freeagenttrends.Request
+	handler.WithFreeAgentTrends(fakeFreeAgentTrendAnalyzer{
+		request: &captured,
+		result:  freeagenttrends.Result{LeagueID: "79286", Trends: nil},
+	})
+	response, err := handler.Handle(context.Background(), Request{
+		Action: ActionTopDefensiveFreeAgentTrends, Season: 2026, LeagueID: "79286",
+		Seasons: []int{2023, 2024, 2025}, Limit: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Status != "ok" || response.DefensiveFreeAgentTrends == nil || response.DefensiveFreeAgentTrends.LeagueID != "79286" {
+		t.Fatalf("response = %+v", response)
+	}
+	if captured.Year != 2026 || captured.LeagueID != "79286" || captured.Limit != 10 || len(captured.Seasons) != 3 {
+		t.Fatalf("captured request = %+v", captured)
 	}
 }

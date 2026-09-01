@@ -113,6 +113,25 @@ func TestHTTPHandlerMapsDefensiveSnapQuery(t *testing.T) {
 	}
 }
 
+func TestHTTPHandlerMapsDefensiveFreeAgentTrendQuery(t *testing.T) {
+	actions := &recordingActionHandler{result: Response{Action: ActionTopDefensiveFreeAgentTrends, Status: "ok"}}
+	handler, err := NewHTTPHandler(actions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := httpEvent("GET", "/v1/free-agents/defensive-trends")
+	event.QueryStringParameters = map[string]string{
+		"season": "2026", "league_id": "79286", "seasons": "2023,2024,2025", "limit": "10",
+	}
+	response := handler.Handle(context.Background(), event)
+	if response.StatusCode != 200 || actions.request.Action != ActionTopDefensiveFreeAgentTrends {
+		t.Fatalf("response/request = %+v / %+v", response, actions.request)
+	}
+	if actions.request.Season != 2026 || actions.request.LeagueID != "79286" || actions.request.Limit != 10 || len(actions.request.Seasons) != 3 {
+		t.Fatalf("request = %+v", actions.request)
+	}
+}
+
 func TestHTTPHandlerRequiresSnapshotAtTimestamp(t *testing.T) {
 	actions := &recordingActionHandler{}
 	handler, err := NewHTTPHandler(actions)

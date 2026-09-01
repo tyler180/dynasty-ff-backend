@@ -284,6 +284,33 @@ The source dataset is provided by the
 [nflverse data project](https://github.com/nflverse/nflverse-data) under
 CC-BY-4.0 and is derived from Pro Football Reference game-level snap counts.
 
+Rank the current MFL league's defensive free agents by sustained increases in
+defensive snap participation:
+
+```json
+{
+  "action": "top_defensive_free_agent_trends",
+  "season": 2026,
+  "league_id": "79286",
+  "seasons": [2023, 2024, 2025],
+  "limit": 10
+}
+```
+
+The action reads the live MFL free-agent pool, resolves MFL IDs through the
+canonical identity table, loads the requested S3 snap seasons, and returns only
+the highest-ranked `rising` signals. When `seasons` is omitted, it defaults to
+the three seasons before the requested league season; `limit` defaults to 10.
+The model compares a raw-snap-weighted three-game baseline with the three most
+recent games and requires at least two recent games to confirm a 10-point or
+larger increase.
+
+The authenticated API exposes the same result:
+
+```text
+GET /v1/free-agents/defensive-trends?season=2026&league_id=79286&seasons=2023,2024,2025&limit=10
+```
+
 Analyze the latest stored snapshot by joining its canonical roster IDs to the
 player profiles in DynamoDB:
 

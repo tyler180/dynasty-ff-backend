@@ -21,6 +21,17 @@ type catalogPlayer struct {
 	Birthdate  int64
 }
 
+// DefensiveFreeAgent is a currently available MFL player at a supported IDP
+// position. MFLID remains provider-scoped and must be resolved before it is
+// used by a model or persistence layer.
+type DefensiveFreeAgent struct {
+	MFLID         string `json:"mfl_id"`
+	Name          string `json:"name"`
+	Position      string `json:"position"`
+	PositionGroup string `json:"position_group"`
+	NFLTeam       string `json:"nfl_team,omitempty"`
+}
+
 func parseCatalog(payload map[string]any) map[string]catalogPlayer {
 	result := make(map[string]catalogPlayer)
 	root := envelope(payload, "players")
@@ -86,6 +97,48 @@ func LeaguePlayerIDs(rostersPayload, freeAgentsPayload map[string]any) []string 
 	}
 	sort.Strings(result)
 	return result
+}
+
+// DefensiveFreeAgents joins the live MFL free-agent response to the MFL player
+// catalog and keeps only positions supported by the defensive-usage model.
+func DefensiveFreeAgents(playersPayload, freeAgentsPayload map[string]any) []DefensiveFreeAgent {
+	catalog := parseCatalog(playersPayload)
+	available := freeAgentRecords(freeAgentsPayload)
+	result := make([]DefensiveFreeAgent, 0, len(available))
+	for id := range available {
+		metadata, ok := catalog[id]
+		if !ok {
+			continue
+		}
+		group := defensivePositionGroup(metadata.Position)
+		if group == "" {
+			continue
+		}
+		result = append(result, DefensiveFreeAgent{
+			MFLID: id, Name: metadata.Name, Position: metadata.Position,
+			PositionGroup: group, NFLTeam: metadata.NFLTeam,
+		})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Name != result[j].Name {
+			return result[i].Name < result[j].Name
+		}
+		return result[i].MFLID < result[j].MFLID
+	})
+	return result
+}
+
+func defensivePositionGroup(position string) string {
+	switch strings.ToUpper(strings.TrimSpace(position)) {
+	case "DE", "DT", "NT", "DL", "EDGE":
+		return "DL"
+	case "LB", "ILB", "OLB", "MLB":
+		return "LB"
+	case "CB", "DB", "S", "FS", "SS", "SAF":
+		return "DB"
+	default:
+		return ""
+	}
 }
 
 func normalizeLeague(payload map[string]any, fallback source.League, franchiseID string) (source.League, string) {
