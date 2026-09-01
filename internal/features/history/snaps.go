@@ -27,6 +27,7 @@ type PlayerGameSnaps struct {
 	OffenseSnaps     int       `json:"offense_snaps"`
 	OffenseSnapPct   float64   `json:"offense_snap_pct"`
 	DefenseSnaps     int       `json:"defense_snaps"`
+	TeamDefenseSnaps int       `json:"team_defense_snaps,omitempty"`
 	DefenseSnapPct   float64   `json:"defense_snap_pct"`
 	SpecialTeamSnaps int       `json:"special_teams_snaps"`
 	SpecialTeamPct   float64   `json:"special_teams_snap_pct"`
@@ -43,6 +44,9 @@ func (s PlayerGameSnaps) Validate() error {
 	}
 	if s.OffenseSnaps < 0 || s.DefenseSnaps < 0 || s.SpecialTeamSnaps < 0 {
 		return fmt.Errorf("snap counts cannot be negative")
+	}
+	if s.TeamDefenseSnaps < 0 || (s.TeamDefenseSnaps > 0 && s.DefenseSnaps > s.TeamDefenseSnaps) {
+		return fmt.Errorf("team defensive snaps must be at least the player's defensive snaps")
 	}
 	for _, percentage := range []float64{s.OffenseSnapPct, s.DefenseSnapPct, s.SpecialTeamPct} {
 		if percentage < 0 || percentage > 1 {

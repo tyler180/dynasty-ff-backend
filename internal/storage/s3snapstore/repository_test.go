@@ -35,7 +35,7 @@ func TestRepositoryWritesAndQueriesCanonicalSnapFacts(t *testing.T) {
 	}
 	records := []history.PlayerGameSnaps{
 		{PlayerID: "player-2", GameID: "2025_02_PHI_KC", Season: 2025, Week: 2, PositionGroup: "DB", DefenseSnaps: 40, DefenseSnapPct: 0.65, Source: "nflverse-pfr"},
-		{PlayerID: "player-1", GameID: "2025_01_DAL_PHI", Season: 2025, Week: 1, PositionGroup: "LB", DefenseSnaps: 52, DefenseSnapPct: 0.83, Source: "nflverse-pfr"},
+		{PlayerID: "player-1", GameID: "2025_01_DAL_PHI", Season: 2025, Week: 1, PositionGroup: "LB", DefenseSnaps: 52, TeamDefenseSnaps: 63, DefenseSnapPct: 0.83, Source: "nflverse-pfr"},
 	}
 	if err := repository.PutPlayerGameSnaps(context.Background(), records); err != nil {
 		t.Fatal(err)

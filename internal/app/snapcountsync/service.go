@@ -4,6 +4,7 @@ package snapcountsync
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -51,6 +52,7 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 		return Result{}, err
 	}
 	result := Result{Season: request.Season, SourceRecords: len(records)}
+	teamDefenseSnaps := deriveTeamDefenseSnaps(records)
 	defensive := make([]nflverse.SnapCount, 0, len(records))
 	uniquePFRIDs := make(map[string]struct{})
 	for _, record := range records {
@@ -91,7 +93,7 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 			PlayerID: profile.ID, GameID: record.GameID, Season: record.Season, Week: record.Week, GameType: record.GameType,
 			Team: record.Team, Opponent: record.Opponent, Position: record.Position, PositionGroup: positionGroup(record.Position),
 			OffenseSnaps: record.OffenseSnaps, OffenseSnapPct: record.OffenseSnapPct,
-			DefenseSnaps: record.DefenseSnaps, DefenseSnapPct: record.DefenseSnapPct,
+			DefenseSnaps: record.DefenseSnaps, TeamDefenseSnaps: teamDefenseSnaps[gameTeamKey(record)], DefenseSnapPct: record.DefenseSnapPct,
 			SpecialTeamSnaps: record.SpecialTeamSnaps, SpecialTeamPct: record.SpecialTeamPct,
 			Source: "nflverse-pfr", IngestionRunID: runID,
 		}
@@ -109,6 +111,41 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	}
 	result.StoredRecords = len(facts)
 	return result, nil
+}
+
+type teamSnapCandidate struct {
+	percentage  float64
+	playerSnaps int
+	total       int
+}
+
+func deriveTeamDefenseSnaps(records []nflverse.SnapCount) map[string]int {
+	candidates := make(map[string]teamSnapCandidate)
+	for _, record := range records {
+		if record.DefenseSnaps <= 0 || record.DefenseSnapPct <= 0 {
+			continue
+		}
+		candidate := teamSnapCandidate{
+			percentage:  record.DefenseSnapPct,
+			playerSnaps: record.DefenseSnaps,
+			total:       int(math.Round(float64(record.DefenseSnaps) / record.DefenseSnapPct)),
+		}
+		key := gameTeamKey(record)
+		current, exists := candidates[key]
+		if !exists || candidate.percentage > current.percentage ||
+			(candidate.percentage == current.percentage && candidate.playerSnaps > current.playerSnaps) {
+			candidates[key] = candidate
+		}
+	}
+	result := make(map[string]int, len(candidates))
+	for key, candidate := range candidates {
+		result[key] = candidate.total
+	}
+	return result
+}
+
+func gameTeamKey(record nflverse.SnapCount) string {
+	return record.GameID + "\x00" + record.Team
 }
 
 func isDefensive(record nflverse.SnapCount) bool {

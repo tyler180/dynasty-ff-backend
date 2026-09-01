@@ -39,6 +39,7 @@ func TestSyncStoresResolvedDefensiveSnapPercentages(t *testing.T) {
 	service := Service{
 		Source: fakeSource{
 			{GameID: "2025_01_DAL_PHI", Season: 2025, Week: 1, PFRPlayerID: "DeanNa00", Position: "LB", Team: "PHI", Opponent: "DAL", DefenseSnaps: 52, DefenseSnapPct: 0.83},
+			{GameID: "2025_01_DAL_PHI", Season: 2025, Week: 1, PFRPlayerID: "FullTi00", Position: "S", Team: "PHI", Opponent: "DAL", DefenseSnaps: 63, DefenseSnapPct: 1},
 			{GameID: "2025_01_DAL_PHI", Season: 2025, Week: 1, PFRPlayerID: "HurtJa00", Position: "QB", Team: "PHI", Opponent: "DAL", OffenseSnaps: 62, OffenseSnapPct: 1},
 			{GameID: "2025_01_NYG_WAS", Season: 2025, Week: 1, PFRPlayerID: "UnmaTc00", Position: "CB", Team: "NYG", Opponent: "WAS", DefenseSnapPct: 0},
 		},
@@ -50,10 +51,22 @@ func TestSyncStoresResolvedDefensiveSnapPercentages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.SourceRecords != 3 || result.DefensiveRecords != 2 || result.StoredRecords != 1 || len(result.UnmatchedPFRPlayerIDs) != 1 {
+	if result.SourceRecords != 4 || result.DefensiveRecords != 3 || result.StoredRecords != 1 || len(result.UnmatchedPFRPlayerIDs) != 2 {
 		t.Fatalf("result = %+v", result)
 	}
-	if len(store.facts) != 1 || store.facts[0].DefenseSnapPct != 0.83 || store.facts[0].PositionGroup != "LB" || store.facts[0].PlayerID != "player-dean" {
+	if len(store.facts) != 1 || store.facts[0].DefenseSnapPct != 0.83 || store.facts[0].TeamDefenseSnaps != 63 || store.facts[0].PositionGroup != "LB" || store.facts[0].PlayerID != "player-dean" {
 		t.Fatalf("facts = %+v", store.facts)
+	}
+}
+
+func TestDeriveTeamDefenseSnapsUsesHighestParticipationRow(t *testing.T) {
+	records := []nflverse.SnapCount{
+		{GameID: "game-1", Team: "PHI", DefenseSnaps: 12, DefenseSnapPct: 0.19},
+		{GameID: "game-1", Team: "PHI", DefenseSnaps: 63, DefenseSnapPct: 1},
+		{GameID: "game-1", Team: "DAL", DefenseSnaps: 61, DefenseSnapPct: 0.98},
+	}
+	totals := deriveTeamDefenseSnaps(records)
+	if totals[gameTeamKey(records[0])] != 63 || totals[gameTeamKey(records[2])] != 62 {
+		t.Fatalf("totals = %+v", totals)
 	}
 }
