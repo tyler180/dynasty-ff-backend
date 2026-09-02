@@ -302,8 +302,10 @@ canonical identity table, loads the requested S3 snap seasons, and returns only
 the highest-ranked `rising` signals. When `seasons` is omitted, it defaults to
 the three seasons before the requested league season; `limit` defaults to 10.
 The model compares a raw-snap-weighted three-game baseline with the three most
-recent games and requires at least two recent games to confirm a 10-point or
-larger increase.
+recent games. PFR's stored per-game `defense_snap_pct` is used directly in
+the weekly trend and is used to confirm that at least two recent games show a
+10-point or larger increase. The multi-game windows remain weighted as
+`sum(defense_snaps) / sum(team_defense_snaps)` rather than averaging percentages.
 
 The authenticated API exposes the same result:
 
