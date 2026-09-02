@@ -62,8 +62,8 @@ github.com/segmentio/encoding v0.5.4 h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfv
 github.com/segmentio/encoding v0.5.4/go.mod h1:HS1ZKa3kSN32ZHVZ7ZLPLXWvOVIiZtyJnO1gPH1sKt0=
 github.com/stretchr/testify v1.7.2 h1:4jaiDzPyXQvSd7D0EjG45355tLlV3VOECpq10pLC+8s=
 github.com/stretchr/testify v1.7.2/go.mod h1:R6va5+xMeoiuVRoj+gSkQ7d3FALtqAAGI1FQKckRals=
-github.com/tyler180/dynasty-ff-models v0.0.11 h1:xAZXqio+ASjBeNAak73CO3zMtnYR9BzFlHNd83VAt4U=
-github.com/tyler180/dynasty-ff-models v0.0.11/go.mod h1:41Fpmdqqt5F7bZ2cpNrpp9+BxYnKdckfzl3JyAjTN4A=
+github.com/tyler180/dynasty-ff-models v0.0.12 h1:PGxYgyYj7nERPYys8c5ig5AP/pA9g4qe2X38IS0/0SM=
+github.com/tyler180/dynasty-ff-models v0.0.12/go.mod h1:41Fpmdqqt5F7bZ2cpNrpp9+BxYnKdckfzl3JyAjTN4A=
 github.com/yosida95/uritemplate/v3 v3.0.2 h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=
 github.com/yosida95/uritemplate/v3 v3.0.2/go.mod h1:ILOh0sOhIJR3+L/8afwt/kE++YT040gmv5BQTMR2HP4=
 golang.org/x/oauth2 v0.34.0 h1:hqK/t4AKgbqWkdkcAeI8XLmbK+4m4G5YeQRrmiotGlw=
