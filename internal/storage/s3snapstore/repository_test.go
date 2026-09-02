@@ -53,3 +53,18 @@ func TestRepositoryWritesAndQueriesCanonicalSnapFacts(t *testing.T) {
 		t.Fatalf("snap facts = %+v", got)
 	}
 }
+
+func TestRepositoryArchivesRawSourceByContentVersion(t *testing.T) {
+	client := &fakeS3{objects: map[string][]byte{}}
+	repository, _ := New(client, "league-data")
+	if err := repository.PutSourceFile(context.Background(), history.SourceFile{
+		Dataset: "nflverse-snap-counts", Season: 2025, Version: "sha256:abc123",
+		SourceURL: "https://example.test/snap.csv", ContentType: "text/csv", Payload: []byte("header\nvalue\n"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	key := "source-data/nflverse-snap-counts/2025/abc123.csv"
+	if string(client.objects[key]) != "header\nvalue\n" {
+		t.Fatalf("stored objects = %+v", client.objects)
+	}
+}

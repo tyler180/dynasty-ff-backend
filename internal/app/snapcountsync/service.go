@@ -3,6 +3,9 @@ package snapcountsync
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -16,7 +19,7 @@ import (
 )
 
 type Source interface {
-	SnapCounts(context.Context, int) ([]nflverse.SnapCount, error)
+	SnapCountDataset(context.Context, int) (nflverse.SnapCountDataset, error)
 }
 
 type Request struct {
@@ -26,9 +29,13 @@ type Request struct {
 type Result struct {
 	Season                int      `json:"season"`
 	SourceRecords         int      `json:"source_records"`
+	PlayerGameRecords     int      `json:"player_game_records"`
 	DefensiveRecords      int      `json:"defensive_records"`
 	ResolvedRecords       int      `json:"resolved_records"`
 	StoredRecords         int      `json:"stored_records"`
+	DatasetVersion        string   `json:"dataset_version"`
+	SourceVersion         string   `json:"source_version"`
+	Unchanged             bool     `json:"unchanged"`
 	UnmatchedPFRPlayers   int      `json:"unmatched_pfr_players"`
 	UnmatchedPFRPlayerIDs []string `json:"unmatched_pfr_player_ids,omitempty"`
 }
@@ -37,6 +44,8 @@ type Service struct {
 	Source     Source
 	Identities identity.BulkResolver
 	Snaps      history.SnapWriter
+	State      history.SnapDatasetStateStore
+	Archive    history.SourceFileWriter
 	Now        func() time.Time
 }
 
@@ -47,22 +56,26 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	if request.Season < 2012 || request.Season > 2100 {
 		return Result{}, fmt.Errorf("snap-count season must be between 2012 and 2100")
 	}
-	records, err := s.Source.SnapCounts(ctx, request.Season)
+	dataset, err := s.Source.SnapCountDataset(ctx, request.Season)
 	if err != nil {
 		return Result{}, err
 	}
+	records := dataset.Records
 	result := Result{Season: request.Season, SourceRecords: len(records)}
 	teamDefenseSnaps := deriveTeamDefenseSnaps(records)
-	defensive := make([]nflverse.SnapCount, 0, len(records))
+	playerGames := make([]nflverse.SnapCount, 0, len(records))
 	uniquePFRIDs := make(map[string]struct{})
 	for _, record := range records {
-		if record.Season != request.Season || strings.TrimSpace(record.PFRPlayerID) == "" || !isDefensive(record) {
+		if record.Season != request.Season || strings.TrimSpace(record.PFRPlayerID) == "" || !hasPlayerGameStats(record) {
 			continue
 		}
-		defensive = append(defensive, record)
+		playerGames = append(playerGames, record)
 		uniquePFRIDs[record.PFRPlayerID] = struct{}{}
+		if isDefensive(record) {
+			result.DefensiveRecords++
+		}
 	}
-	result.DefensiveRecords = len(defensive)
+	result.PlayerGameRecords = len(playerGames)
 	externalIDs := make([]player.ExternalID, 0, len(uniquePFRIDs))
 	for pfrID := range uniquePFRIDs {
 		externalIDs = append(externalIDs, player.ExternalID{Provider: player.ProviderPFR, Value: pfrID})
@@ -83,14 +96,15 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 		now = time.Now
 	}
 	runID := now().UTC().Format("20060102T150405.000000000Z")
-	facts := make([]history.PlayerGameSnaps, 0, len(defensive))
-	for _, record := range defensive {
+	facts := make([]history.PlayerGameSnaps, 0, len(playerGames))
+	for _, record := range playerGames {
 		profile, ok := resolved[player.ExternalID{Provider: player.ProviderPFR, Value: record.PFRPlayerID}]
 		if !ok {
 			continue
 		}
 		fact := history.PlayerGameSnaps{
-			PlayerID: profile.ID, GameID: record.GameID, Season: record.Season, Week: record.Week, GameType: record.GameType,
+			PlayerID: profile.ID, SourcePlayerID: record.PFRPlayerID, PlayerName: record.PlayerName,
+			GameID: record.GameID, SourceGameID: record.PFRGameID, Season: record.Season, Week: record.Week, GameType: record.GameType,
 			Team: record.Team, Opponent: record.Opponent, Position: record.Position, PositionGroup: positionGroup(record.Position),
 			OffenseSnaps: record.OffenseSnaps, OffenseSnapPct: record.OffenseSnapPct,
 			DefenseSnaps: record.DefenseSnaps, TeamDefenseSnaps: teamDefenseSnaps[gameTeamKey(record)], DefenseSnapPct: record.DefenseSnapPct,
@@ -104,13 +118,67 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	}
 	result.ResolvedRecords = len(facts)
 	if len(facts) == 0 {
-		return Result{}, fmt.Errorf("no defensive snap records resolved to canonical players; sync player identities first")
+		return Result{}, fmt.Errorf("no player-game snap records resolved to canonical players; sync player identities first")
+	}
+	version, err := datasetVersion(facts)
+	if err != nil {
+		return Result{}, err
+	}
+	result.DatasetVersion = version
+	result.SourceVersion = dataset.SourceVersion
+	if s.State != nil {
+		state, err := s.State.SnapDatasetState(ctx, request.Season)
+		if err != nil {
+			return Result{}, err
+		}
+		if state.Version == version && state.SourceVersion == dataset.SourceVersion {
+			result.Unchanged = true
+			return result, nil
+		}
+	}
+	if s.Archive != nil {
+		if err := s.Archive.PutSourceFile(ctx, history.SourceFile{
+			Dataset: "nflverse-snap-counts", Season: request.Season, Version: dataset.SourceVersion,
+			SourceURL: dataset.SourceURL, ContentType: "text/csv", Payload: dataset.Payload,
+		}); err != nil {
+			return Result{}, err
+		}
 	}
 	if err := s.Snaps.PutPlayerGameSnaps(ctx, facts); err != nil {
 		return Result{}, err
 	}
 	result.StoredRecords = len(facts)
+	if s.State != nil {
+		if err := s.State.PutSnapDatasetState(ctx, history.SnapDatasetState{
+			Season: request.Season, SourceVersion: dataset.SourceVersion, Version: version,
+			RecordCount: len(facts), ImportedAt: now().UTC(),
+		}); err != nil {
+			return Result{}, err
+		}
+	}
 	return result, nil
+}
+
+func datasetVersion(facts []history.PlayerGameSnaps) (string, error) {
+	normalized := append([]history.PlayerGameSnaps(nil), facts...)
+	for index := range normalized {
+		normalized[index].IngestionRunID = ""
+	}
+	sort.Slice(normalized, func(i, j int) bool {
+		if normalized[i].Week != normalized[j].Week {
+			return normalized[i].Week < normalized[j].Week
+		}
+		if normalized[i].GameID != normalized[j].GameID {
+			return normalized[i].GameID < normalized[j].GameID
+		}
+		return normalized[i].PlayerID < normalized[j].PlayerID
+	})
+	payload, err := json.Marshal(normalized)
+	if err != nil {
+		return "", fmt.Errorf("fingerprint normalized snap counts: %w", err)
+	}
+	digest := sha256.Sum256(payload)
+	return "sha256:" + hex.EncodeToString(digest[:]), nil
 }
 
 type teamSnapCandidate struct {
@@ -150,6 +218,12 @@ func gameTeamKey(record nflverse.SnapCount) string {
 
 func isDefensive(record nflverse.SnapCount) bool {
 	return record.DefenseSnaps > 0 || record.DefenseSnapPct > 0 || positionGroup(record.Position) != ""
+}
+
+func hasPlayerGameStats(record nflverse.SnapCount) bool {
+	return record.OffenseSnaps > 0 || record.OffenseSnapPct > 0 ||
+		record.DefenseSnaps > 0 || record.DefenseSnapPct > 0 ||
+		record.SpecialTeamSnaps > 0 || record.SpecialTeamPct > 0 || isDefensive(record)
 }
 
 func positionGroup(position string) string {

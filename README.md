@@ -65,8 +65,9 @@ put MFL credentials in command arguments, source files, or Terraform values.
 
 ## Lambda persistence API
 
-The Lambda reads `PLAYER_IDENTITY_TABLE` and `LEAGUE_DATA_BUCKET` from its
-environment. Terraform supplies both values from the resources it manages.
+The Lambda reads `PLAYER_IDENTITY_TABLE`, `PLAYER_GAME_STATS_TABLE`, and
+`LEAGUE_DATA_BUCKET` from its environment. Terraform supplies all three values
+from the resources it manages.
 Invoke it with an explicit action. For example, the health check is:
 
 ```json
@@ -250,16 +251,28 @@ import one season of game-level snap facts from nflverse:
 }
 ```
 
-The sync stores defensive snaps and defensive-snap percentage for defensive
-players in the versioned league-data bucket at
-`snap-counts/<season>/latest.json`. Percentages are fractions from 0 through 1,
-so `0.83` represents 83%. The response reports unresolved PFR player IDs rather
-than guessing identity matches.
+The sync archives every resolved player row from the nflverse snap-count feed,
+including offense, defense, and special-teams participation, in the
+versioned league-data bucket at `snap-counts/<season>/latest.json`, then indexes
+each canonical player/game in the dedicated player-game DynamoDB table.
+The original CSV is also retained by content hash under
+`source-data/nflverse-snap-counts/<season>/`.
+Percentages are fractions from 0 through 1, so `0.83` represents 83%. The
+response reports unresolved PFR player IDs rather than guessing identity
+matches.
 
-Each fact also stores the corresponding team's defensive snap total, derived
-from the highest-participation player row for that game and team. Downstream
-models can therefore aggregate usage as `sum(player snaps) / sum(team snaps)`
-instead of averaging rounded game percentages.
+Each normalized season has a content fingerprint in DynamoDB. The scheduled
+nflverse sync downloads the current-season release daily but performs no S3 or
+DynamoDB writes when the normalized records have not changed. When they do
+change, the season is reconciled so corrected and removed source rows do not
+leave stale player-game items. See
+[the player-game table design](docs/player-game-stats-table.md).
+
+Each defensive fact also stores the corresponding team's defensive snap total,
+derived from the highest-participation player row for that game and team.
+Downstream models can therefore aggregate usage as
+`sum(player snaps) / sum(team snaps)` instead of averaging rounded game
+percentages.
 
 Canonical players can be queried directly through the Lambda action:
 
@@ -298,9 +311,11 @@ defensive snap participation:
 ```
 
 The action reads the live MFL free-agent pool, resolves MFL IDs through the
-canonical identity table, loads the requested S3 snap seasons, and returns only
-the highest-ranked `rising` signals. When `seasons` is omitted, it defaults to
-the three seasons before the requested league season; `limit` defaults to 10.
+canonical identity table, queries the requested player histories from DynamoDB,
+and returns only the highest-ranked `rising` signals. Seasons that have not yet
+been migrated transparently fall back to the S3 archive. When `seasons` is
+omitted, it defaults to the three seasons before the requested league season;
+`limit` defaults to 10.
 The model compares a raw-snap-weighted three-game baseline with the three most
 recent games. PFR's stored per-game `defense_snap_pct` is used directly in
 the weekly trend and is used to confirm that at least two recent games show a
@@ -368,4 +383,6 @@ because it cannot authorize MFL imports. FantasyPros data use is subject to the
 API account's license and must remain personal/non-commercial unless a different
 license is obtained. Scheduled sync is disabled by default; set
 `mfl_sync_schedule_expression` only after the identities and credentials are
-ready.
+ready. The current nflverse season is checked daily by default; set
+`nflverse_sync_schedule_expression = null` to disable it or update
+`nflverse_sync_year` when rolling into a new season.

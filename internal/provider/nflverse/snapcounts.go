@@ -2,8 +2,11 @@
 package nflverse
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/csv"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,6 +45,13 @@ type SnapCount struct {
 	SpecialTeamPct   float64
 }
 
+type SnapCountDataset struct {
+	Records       []SnapCount
+	Payload       []byte
+	SourceURL     string
+	SourceVersion string
+}
+
 func New(httpClient HTTPClient, urlTemplate string) (*Client, error) {
 	if httpClient == nil {
 		return nil, fmt.Errorf("HTTP client is required")
@@ -57,27 +67,44 @@ func NewDefault(urlTemplate string) (*Client, error) {
 }
 
 func (c *Client) SnapCounts(ctx context.Context, season int) ([]SnapCount, error) {
-	if season < 2012 || season > 2100 {
-		return nil, fmt.Errorf("snap-count season must be between 2012 and 2100")
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf(c.urlTemplate, season), nil)
+	dataset, err := c.SnapCountDataset(ctx, season)
 	if err != nil {
-		return nil, fmt.Errorf("create nflverse snap-count request: %w", err)
+		return nil, err
+	}
+	return dataset.Records, nil
+}
+
+func (c *Client) SnapCountDataset(ctx context.Context, season int) (SnapCountDataset, error) {
+	if season < 2012 || season > 2100 {
+		return SnapCountDataset{}, fmt.Errorf("snap-count season must be between 2012 and 2100")
+	}
+	sourceURL := fmt.Sprintf(c.urlTemplate, season)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, sourceURL, nil)
+	if err != nil {
+		return SnapCountDataset{}, fmt.Errorf("create nflverse snap-count request: %w", err)
 	}
 	request.Header.Set("User-Agent", "dynasty-ff-backend/0.1")
 	response, err := c.httpClient.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("download nflverse snap counts: %w", err)
+		return SnapCountDataset{}, fmt.Errorf("download nflverse snap counts: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download nflverse snap counts: HTTP %s", response.Status)
+		return SnapCountDataset{}, fmt.Errorf("download nflverse snap counts: HTTP %s", response.Status)
 	}
-	records, err := decodeSnapCounts(response.Body)
+	payload, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, fmt.Errorf("decode nflverse snap counts: %w", err)
+		return SnapCountDataset{}, fmt.Errorf("read nflverse snap counts: %w", err)
 	}
-	return records, nil
+	records, err := decodeSnapCounts(bytes.NewReader(payload))
+	if err != nil {
+		return SnapCountDataset{}, fmt.Errorf("decode nflverse snap counts: %w", err)
+	}
+	digest := sha256.Sum256(payload)
+	return SnapCountDataset{
+		Records: records, Payload: payload, SourceURL: sourceURL,
+		SourceVersion: "sha256:" + hex.EncodeToString(digest[:]),
+	}, nil
 }
 
 func decodeSnapCounts(reader io.Reader) ([]SnapCount, error) {

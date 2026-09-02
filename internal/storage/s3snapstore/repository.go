@@ -74,6 +74,26 @@ func (r *Repository) PutPlayerGameSnaps(ctx context.Context, records []history.P
 	return nil
 }
 
+func (r *Repository) PutSourceFile(ctx context.Context, file history.SourceFile) error {
+	if strings.TrimSpace(file.Dataset) == "" || file.Season < 2012 || strings.TrimSpace(file.Version) == "" || len(file.Payload) == 0 {
+		return fmt.Errorf("complete source file metadata and payload are required")
+	}
+	version := strings.TrimPrefix(file.Version, "sha256:")
+	key := fmt.Sprintf("source-data/%s/%d/%s.csv", file.Dataset, file.Season, version)
+	contentType := strings.TrimSpace(file.ContentType)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	_, err := r.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(r.bucket), Key: aws.String(key), Body: bytes.NewReader(file.Payload),
+		ContentType: aws.String(contentType), Metadata: map[string]string{"source-url": file.SourceURL, "source-version": file.Version},
+	})
+	if err != nil {
+		return fmt.Errorf("archive %s source file in S3: %w", file.Dataset, err)
+	}
+	return nil
+}
+
 func (r *Repository) PlayerGameSnaps(ctx context.Context, query history.SnapQuery) ([]history.PlayerGameSnaps, error) {
 	if err := query.Validate(); err != nil {
 		return nil, err
@@ -107,6 +127,8 @@ func (r *Repository) PlayerGameSnaps(ctx context.Context, query history.SnapQuer
 	sortFacts(result)
 	return result, nil
 }
+
+var _ history.SourceFileWriter = (*Repository)(nil)
 
 func (r *Repository) getSeason(ctx context.Context, season int) (seasonDocument, error) {
 	output, err := r.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(r.bucket), Key: aws.String(seasonKey(season))})
