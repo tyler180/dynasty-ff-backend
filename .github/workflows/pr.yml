@@ -21,6 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       go: ${{ steps.filter.outputs.go }}
+      terraform: ${{ steps.filter.outputs.terraform }}
+      image: ${{ steps.filter.outputs.image }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -34,6 +36,17 @@ jobs:
               - '**/*.go'
               - 'go.mod'
               - 'go.sum'
+            terraform:
+              - 'terraform/**'
+            image:
+              - 'cmd/**'
+              - 'config/**'
+              - 'data/**'
+              - 'docs/**'
+              - 'internal/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Dockerfile'
 
   go:
     name: Go
@@ -85,6 +98,7 @@ jobs:
     if: |
       always() &&
       needs.changes.result == 'success' &&
+      (needs.changes.outputs.terraform == 'true' || needs.changes.outputs.image == 'true') &&
       (needs.go.result == 'success' || needs.go.result == 'skipped')
     permissions:
       contents: read
