@@ -12,6 +12,9 @@ locals {
     "dynasty-ff-backend/data/**",
     "dynasty-ff-backend/docs/**",
     "dynasty-ff-backend/internal/**",
+    "dynasty-ff-backend/Dockerfile",
+    "dynasty-ff-backend/go.mod",
+    "dynasty-ff-backend/go.sum",
     "dynasty-ff-models/analysis/**",
     "dynasty-ff-models/cmd/**",
     "dynasty-ff-models/config/**",
@@ -20,8 +23,12 @@ locals {
     "dynasty-ff-models/draft/**",
     "dynasty-ff-models/internal/**",
     "dynasty-ff-models/usage/**",
+    "dynasty-ff-models/go.mod",
+    "dynasty-ff-models/go.sum",
     "mfl/mfl-mcp/cmd/**",
     "mfl/mfl-mcp/internal/**",
+    "mfl/mfl-mcp/go.mod",
+    "mfl/mfl-mcp/go.sum",
   ]
   # path_exclude = [
   #   "dynasty-ff-*/terraform/**",
@@ -108,9 +115,9 @@ module "ff_backend_build" {
     ]
   })
 
-  # use_image_tag = false # If false, sha of the image will be used
-  use_image_tag = true
-  image_tag     = "1.0"
+  use_image_tag = false # If false, sha of the image will be used
+  # use_image_tag = true
+  # image_tag     = "1.0"
 
   source_path      = local.source_path
   docker_file_path = "${local.source_path}/dynasty-ff-backend/Dockerfile"
