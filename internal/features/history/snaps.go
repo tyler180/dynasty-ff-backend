@@ -15,7 +15,10 @@ import (
 // snap totals rather than by averaging game percentages.
 type PlayerGameSnaps struct {
 	PlayerID         player.ID `json:"player_id"`
+	SourcePlayerID   string    `json:"source_player_id,omitempty"`
+	PlayerName       string    `json:"player_name,omitempty"`
 	GameID           string    `json:"game_id"`
+	SourceGameID     string    `json:"source_game_id,omitempty"`
 	Season           int       `json:"season"`
 	Week             int       `json:"week"`
 	GameDate         time.Time `json:"game_date,omitzero"`
@@ -99,4 +102,33 @@ type SnapReader interface {
 
 type SnapWriter interface {
 	PutPlayerGameSnaps(context.Context, []PlayerGameSnaps) error
+}
+
+// SnapDatasetState tracks the content version of one imported season. The
+// version is derived from normalized source records, so repeated scheduled
+// syncs can avoid rewriting an unchanged dataset.
+type SnapDatasetState struct {
+	Season        int
+	SourceVersion string
+	Version       string
+	RecordCount   int
+	ImportedAt    time.Time
+}
+
+type SnapDatasetStateStore interface {
+	SnapDatasetState(context.Context, int) (SnapDatasetState, error)
+	PutSnapDatasetState(context.Context, SnapDatasetState) error
+}
+
+type SourceFile struct {
+	Dataset     string
+	Season      int
+	Version     string
+	SourceURL   string
+	ContentType string
+	Payload     []byte
+}
+
+type SourceFileWriter interface {
+	PutSourceFile(context.Context, SourceFile) error
 }

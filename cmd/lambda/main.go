@@ -26,8 +26,10 @@ import (
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/mflidentity"
 	"github.com/tyler180/dynasty-ff-backend/internal/provider/nflverse"
 	"github.com/tyler180/dynasty-ff-backend/internal/storage/dynamodbidentity"
+	"github.com/tyler180/dynasty-ff-backend/internal/storage/dynamodbplayerstats"
 	"github.com/tyler180/dynasty-ff-backend/internal/storage/s3leaguestore"
 	"github.com/tyler180/dynasty-ff-backend/internal/storage/s3snapstore"
+	"github.com/tyler180/dynasty-ff-backend/internal/storage/snapstore"
 )
 
 func main() {
@@ -51,6 +53,10 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	playerGameTableName, err := requiredEnvironment("PLAYER_GAME_STATS_TABLE")
+	if err != nil {
+		return nil, err
+	}
 	awsConfig, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load AWS configuration: %w", err)
@@ -63,10 +69,16 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	snapCounts, err := s3snapstore.NewFromConfig(awsConfig, bucketName)
+	snapArchive, err := s3snapstore.NewFromConfig(awsConfig, bucketName)
 	if err != nil {
 		return nil, err
 	}
+	playerGameStats, err := dynamodbplayerstats.NewFromConfig(awsConfig, playerGameTableName)
+	if err != nil {
+		return nil, err
+	}
+	snapCounts := snapstore.Reader{Primary: playerGameStats, Fallback: snapArchive, State: playerGameStats}
+	snapWriter := snapstore.Writer{Archive: snapArchive, Primary: playerGameStats}
 	secretARN, err := requiredEnvironment("MFL_SECRET_ARN")
 	if err != nil {
 		return nil, err
@@ -112,7 +124,9 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	handler.WithSnapCounts(snapcountsync.Service{Source: snapSource, Identities: identities, Snaps: snapCounts}, snapCounts)
+	handler.WithSnapCounts(snapcountsync.Service{
+		Source: snapSource, Identities: identities, Snaps: snapWriter, State: playerGameStats, Archive: snapArchive,
+	}, snapCounts)
 	handler.WithFreeAgentTrends(freeagenttrends.Service{
 		FreeAgents: mflfreeagents.Source{MCPCommand: mcpCommand, Credentials: credentials},
 		Identities: identities, Snaps: snapCounts,

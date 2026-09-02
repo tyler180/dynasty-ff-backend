@@ -63,6 +63,7 @@ module "ff_backend_lambda" {
 
   environment_variables = {
     PLAYER_IDENTITY_TABLE    = module.dynamodb_table.dynamodb_table_id
+    PLAYER_GAME_STATS_TABLE  = module.player_game_stats_table.dynamodb_table_id
     LEAGUE_DATA_BUCKET       = module.backend_bucket.s3_bucket_id
     MFL_MCP_COMMAND          = "/var/task/mfl-mcp"
     MFL_SECRET_ARN           = module.secrets_manager.secret_arn

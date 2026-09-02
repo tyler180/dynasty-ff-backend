@@ -24,12 +24,16 @@ func TestClientReadsSnapCounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	records, err := client.SnapCounts(context.Background(), 2025)
+	dataset, err := client.SnapCountDataset(context.Background(), 2025)
 	if err != nil {
 		t.Fatal(err)
 	}
+	records := dataset.Records
 	if len(records) != 1 || records[0].PFRPlayerID != "DeanNa00" || records[0].DefenseSnaps != 52 || records[0].DefenseSnapPct != 0.83 {
 		t.Fatalf("records = %+v", records)
+	}
+	if dataset.SourceVersion == "" || dataset.SourceURL != "https://example.test/snaps_2025.csv" || string(dataset.Payload) != header+row {
+		t.Fatalf("dataset metadata = %+v", dataset)
 	}
 }
 

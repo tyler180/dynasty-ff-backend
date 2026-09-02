@@ -26,6 +26,23 @@ variable "mfl_sync_franchise_id" {
   default     = "0005"
 }
 
+variable "nflverse_sync_schedule_expression" {
+  description = "EventBridge schedule for checking the current nflverse snap-count dataset; null disables scheduling"
+  type        = string
+  default     = "rate(1 day)"
+}
+
+variable "nflverse_sync_year" {
+  description = "NFL season checked by the scheduled nflverse sync"
+  type        = number
+  default     = 2026
+
+  validation {
+    condition     = var.nflverse_sync_year >= 2012 && var.nflverse_sync_year <= 2100
+    error_message = "nflverse_sync_year must be between 2012 and 2100."
+  }
+}
+
 variable "api_jwt_issuer" {
   description = "HTTPS issuer URL for the OIDC provider whose JWTs may call the read-only HTTP API"
   type        = string

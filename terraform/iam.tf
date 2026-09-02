@@ -10,6 +10,19 @@ data "aws_iam_policy_document" "lambda_policy_doc" {
 
   statement {
     actions = [
+      "dynamodb:BatchWriteItem",
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:Query",
+    ]
+    resources = [
+      module.player_game_stats_table.dynamodb_table_arn,
+      "${module.player_game_stats_table.dynamodb_table_arn}/index/season-index",
+    ]
+  }
+
+  statement {
+    actions = [
       "s3:ListBucket",
     ]
     resources = [module.backend_bucket.s3_bucket_arn]
@@ -23,6 +36,7 @@ data "aws_iam_policy_document" "lambda_policy_doc" {
     resources = [
       "${module.backend_bucket.s3_bucket_arn}/snapshots/*",
       "${module.backend_bucket.s3_bucket_arn}/snap-counts/*",
+      "${module.backend_bucket.s3_bucket_arn}/source-data/*",
     ]
   }
 

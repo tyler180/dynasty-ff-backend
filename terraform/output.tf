@@ -18,6 +18,11 @@ output "player_identity_table_name" {
   value = module.dynamodb_table.dynamodb_table_id
 }
 
+output "player_game_stats_table_name" {
+  description = "DynamoDB table containing normalized player-game statistics"
+  value       = module.player_game_stats_table.dynamodb_table_id
+}
+
 output "league_data_bucket_name" {
   value = module.backend_bucket.s3_bucket_id
 }
