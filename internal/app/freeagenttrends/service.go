@@ -122,6 +122,7 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 			PlayerID: string(fact.PlayerID), GameID: fact.GameID, Season: fact.Season, Week: fact.Week,
 			GameType: fact.GameType, PositionGroup: fact.PositionGroup,
 			DefenseSnaps: fact.DefenseSnaps, TeamDefenseSnaps: fact.TeamDefenseSnaps,
+			DefenseSnapPct: fact.DefenseSnapPct,
 		})
 		withSnaps[string(fact.PlayerID)] = struct{}{}
 	}

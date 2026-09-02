@@ -107,5 +107,34 @@ func snapFact(id player.ID, week, defenseSnaps int) history.PlayerGameSnaps {
 	return history.PlayerGameSnaps{
 		PlayerID: id, GameID: "2025_" + string(rune('A'+week)), Season: 2025, Week: week,
 		GameType: "REG", PositionGroup: "LB", DefenseSnaps: defenseSnaps, TeamDefenseSnaps: 60,
+		DefenseSnapPct: float64(defenseSnaps) / 60,
+	}
+}
+
+func TestAnalyzePreservesPFRPercentageInWeeklyTrend(t *testing.T) {
+	available := fakeFreeAgents{{MFLID: "100", Name: "Rising Linebacker", Position: "LB", PositionGroup: "LB"}}
+	identities := fakeIdentities{
+		{Provider: player.ProviderMFL, Value: "100"}: {ID: "player-rising", DisplayName: "Rising Linebacker"},
+	}
+	snaps := &fakeSnaps{}
+	for week, count := range []int{12, 12, 12, 30, 30, 30} {
+		fact := snapFact("player-rising", week+1, count)
+		if week >= 3 {
+			fact.DefenseSnapPct = 0.51
+		}
+		snaps.facts = append(snaps.facts, fact)
+	}
+
+	result, err := (Service{FreeAgents: available, Identities: identities, Snaps: snaps}).Analyze(context.Background(), Request{
+		Year: 2026, LeagueID: "79286", Seasons: []int{2025}, Limit: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Trends) != 1 || result.Trends[0].Weekly[3].DefenseSnapShare != 0.51 {
+		t.Fatalf("trends = %+v", result.Trends)
+	}
+	if result.Trends[0].Recent.DefenseSnapShare != 0.50 {
+		t.Fatalf("weighted recent window = %+v", result.Trends[0].Recent)
 	}
 }
