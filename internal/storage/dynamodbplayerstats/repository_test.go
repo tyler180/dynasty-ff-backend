@@ -13,10 +13,11 @@ import (
 )
 
 type fakeClient struct {
-	mu      sync.Mutex
-	queries []*dynamodb.QueryInput
-	writes  []types.WriteRequest
-	state   map[string]types.AttributeValue
+	mu         sync.Mutex
+	queries    []*dynamodb.QueryInput
+	writes     []types.WriteRequest
+	state      map[string]types.AttributeValue
+	queryItems []map[string]types.AttributeValue
 }
 
 func (f *fakeClient) BatchWriteItem(_ context.Context, input *dynamodb.BatchWriteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.BatchWriteItemOutput, error) {
@@ -43,6 +44,9 @@ func (f *fakeClient) Query(_ context.Context, input *dynamodb.QueryInput, _ ...f
 		return &dynamodb.QueryOutput{Items: []map[string]types.AttributeValue{
 			{"pk": stringValue("PLAYER#stale"), "sk": stringValue("GAME#2025#01#old")},
 		}}, nil
+	}
+	if f.queryItems != nil {
+		return &dynamodb.QueryOutput{Items: f.queryItems}, nil
 	}
 	return &dynamodb.QueryOutput{Items: []map[string]types.AttributeValue{
 		encode(history.PlayerGameSnaps{
@@ -99,5 +103,51 @@ func TestRepositoryStoresDatasetState(t *testing.T) {
 	}
 	if got != want {
 		t.Fatalf("state = %+v, want %+v", got, want)
+	}
+}
+
+func TestRepositoryStoresAndReadsWeeklyPlayerStats(t *testing.T) {
+	client := &fakeClient{}
+	repository, _ := New(client, "player-game-stats")
+	record := history.PlayerGameStats{
+		PlayerID: "player-1", SourcePlayerID: "00-001", DisplayName: "A Player", Position: "LB", PositionGroup: "LB",
+		Season: 2025, Week: 1, GameType: "REG", GameID: "game-1", Team: "PHI", Opponent: "DAL",
+		Metrics: map[string]float64{"def_sacks": 1.5}, Attributes: map[string]string{"headshot_url": "https://example.test/a.png"},
+		Source: "nflverse-player-stats",
+	}
+	if err := repository.PutPlayerGameStats(context.Background(), []history.PlayerGameStats{record}); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.writes) == 0 || client.writes[0].PutRequest == nil {
+		t.Fatalf("writes = %+v", client.writes)
+	}
+	client.queries = nil
+	client.queryItems = []map[string]types.AttributeValue{encodePlayerStats(record), encode(history.PlayerGameSnaps{
+		PlayerID: "player-1", GameID: "game-1", Season: 2025, Week: 1, Source: "nflverse-pfr",
+	})}
+	got, err := repository.PlayerGameStats(context.Background(), history.PlayerStatsQuery{
+		PlayerIDs: []player.ID{"player-1"}, Seasons: []int{2025},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Metrics["def_sacks"] != 1.5 || got[0].Attributes["headshot_url"] == "" {
+		t.Fatalf("stats = %+v", got)
+	}
+}
+
+func TestRepositoryStoresPlayerStatsDatasetState(t *testing.T) {
+	client := &fakeClient{}
+	repository, _ := New(client, "player-game-stats")
+	want := history.PlayerStatsDatasetState{
+		Season: 2025, SourceVersion: "sha256:source", Version: "sha256:normalized", RecordCount: 42,
+		ImportedAt: time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC),
+	}
+	if err := repository.PutPlayerStatsDatasetState(context.Background(), want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := repository.PlayerStatsDatasetState(context.Background(), 2025)
+	if err != nil || got != want {
+		t.Fatalf("state = %+v, err = %v", got, err)
 	}
 }

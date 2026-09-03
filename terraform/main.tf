@@ -70,9 +70,14 @@ module "ff_backend_lambda" {
     MFL_YEAR                 = "2026"
     IDENTITY_SOURCE_URL      = "https://raw.githubusercontent.com/DynastyProcess/data/master/files/db_playerids.csv"
     SNAP_COUNTS_URL_TEMPLATE = "https://github.com/nflverse/nflverse-data/releases/download/snap_counts/snap_counts_%d.csv"
+    PLAYER_STATS_URL_TEMPLATES = join(",", [
+      "https://github.com/nflverse/nflverse-data/releases/download/player_stats/stats_player_week_%d.csv",
+      "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_%d.csv",
+    ])
   }
 
-  timeout = 900
+  timeout     = 900
+  memory_size = 1024
 
   # allowed_triggers = {
   #   MFLSync = {

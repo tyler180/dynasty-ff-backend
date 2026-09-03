@@ -33,9 +33,9 @@ variable "nflverse_sync_schedule_expression" {
 }
 
 variable "nflverse_sync_year" {
-  description = "NFL season checked by the scheduled nflverse sync"
+  description = "Latest NFL season currently published and checked by scheduled nflverse syncs"
   type        = number
-  default     = 2026
+  default     = 2025
 
   validation {
     condition     = var.nflverse_sync_year >= 2012 && var.nflverse_sync_year <= 2100

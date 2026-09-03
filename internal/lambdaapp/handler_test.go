@@ -8,6 +8,7 @@ import (
 	"github.com/tyler180/dynasty-ff-backend/internal/app/freeagenttrends"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
+	"github.com/tyler180/dynasty-ff-backend/internal/app/playerstatsync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/snapcountsync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/snapshotanalysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
@@ -52,6 +53,21 @@ type fakeSnapCounts struct {
 	result     []history.PlayerGameSnaps
 	syncResult snapcountsync.Result
 	query      history.SnapQuery
+}
+
+type fakePlayerStats struct {
+	result     []history.PlayerGameStats
+	syncResult playerstatsync.Result
+	query      history.PlayerStatsQuery
+}
+
+func (f *fakePlayerStats) Sync(context.Context, playerstatsync.Request) (playerstatsync.Result, error) {
+	return f.syncResult, nil
+}
+
+func (f *fakePlayerStats) PlayerGameStats(_ context.Context, query history.PlayerStatsQuery) ([]history.PlayerGameStats, error) {
+	f.query = query
+	return f.result, nil
 }
 
 func (f *fakeSnapCounts) Sync(context.Context, snapcountsync.Request) (snapcountsync.Result, error) {
@@ -304,6 +320,31 @@ func TestHandlerSyncsAndReadsDefensiveSnapCounts(t *testing.T) {
 	}
 	if len(snaps.query.PlayerIDs) != 1 || snaps.query.PlayerIDs[0] != "player-1" {
 		t.Fatalf("query = %+v", snaps.query)
+	}
+}
+
+func TestHandlerSyncsAndReadsPlayerStats(t *testing.T) {
+	handler, err := New(&fakeSnapshots{}, &fakeIdentities{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stats := &fakePlayerStats{
+		syncResult: playerstatsync.Result{Season: 2025, StoredRecords: 1},
+		result: []history.PlayerGameStats{{
+			PlayerID: "player-1", SourcePlayerID: "00-001", Season: 2025, Week: 1,
+			GameID: "game-1", Metrics: map[string]float64{"def_sacks": 1.5}, Source: "nflverse-player-stats",
+		}},
+	}
+	handler.WithPlayerStats(stats, stats)
+	response, err := handler.Handle(context.Background(), Request{Action: ActionSyncPlayerStats, Season: 2025})
+	if err != nil || response.PlayerStatsSync == nil || response.PlayerStatsSync.StoredRecords != 1 {
+		t.Fatalf("sync response/error = %+v / %v", response, err)
+	}
+	response, err = handler.Handle(context.Background(), Request{
+		Action: ActionGetPlayerStats, PlayerIDs: []player.ID{"player-1"}, Seasons: []int{2025},
+	})
+	if err != nil || len(response.PlayerStats) != 1 || response.PlayerStats[0].Metrics["def_sacks"] != 1.5 {
+		t.Fatalf("query response/error = %+v / %v", response, err)
 	}
 }
 

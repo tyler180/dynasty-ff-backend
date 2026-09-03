@@ -16,6 +16,7 @@ import (
 	"github.com/tyler180/dynasty-ff-backend/internal/app/freeagenttrends"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
+	"github.com/tyler180/dynasty-ff-backend/internal/app/playerstatsync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/snapcountsync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/snapshotanalysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/lambdaapp"
@@ -127,6 +128,14 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 	handler.WithSnapCounts(snapcountsync.Service{
 		Source: snapSource, Identities: identities, Snaps: snapWriter, State: playerGameStats, Archive: snapArchive,
 	}, snapCounts)
+	playerStatsSource, err := nflverse.NewDefaultPlayerStats(splitEnvironment("PLAYER_STATS_URL_TEMPLATES"))
+	if err != nil {
+		return nil, err
+	}
+	handler.WithPlayerStats(playerstatsync.Service{
+		Source: playerStatsSource, Identities: identities, Stats: playerGameStats,
+		State: playerGameStats, Archive: snapArchive,
+	}, playerGameStats)
 	handler.WithFreeAgentTrends(freeagenttrends.Service{
 		FreeAgents: mflfreeagents.Source{MCPCommand: mcpCommand, Credentials: credentials},
 		Identities: identities, Snaps: snapCounts,
@@ -138,6 +147,16 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 		MCPCommand: mcpCommand, Credentials: credentials,
 		Identities: identities, Snapshots: snapshots, Enrichments: snapshots, Evaluations: playerEvaluations,
 	}), nil
+}
+
+func splitEnvironment(name string) []string {
+	var values []string
+	for _, value := range strings.Split(os.Getenv(name), ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
 }
 
 type lambdaInvoker interface {

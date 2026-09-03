@@ -2,6 +2,21 @@
 
 test:
 	go test ./...
+	go test -race ./...
+	go vet ./...
+	terraform fmt -recurisve
+	terraform -chdir=terraform init
+	terraform -chdir=terraform validate
+
+gotest:
+	go test ./...
+	go test -race ./...
+	go vet ./...
+
+tftest:
+	terraform fmt -recursive
+	terraform -chdir=terraform init
+	terraform -chdir=terraform validate
 
 build:
 	mkdir -p bin
