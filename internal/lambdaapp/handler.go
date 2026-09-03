@@ -10,6 +10,7 @@ import (
 	"github.com/tyler180/dynasty-ff-backend/internal/app/freeagenttrends"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
+	"github.com/tyler180/dynasty-ff-backend/internal/app/playerstatsync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/snapcountsync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/snapshotanalysis"
 	"github.com/tyler180/dynasty-ff-backend/internal/domain/league"
@@ -34,6 +35,8 @@ const (
 	ActionSyncMFL                     = "sync_mfl"
 	ActionSyncSnapCounts              = "sync_snap_counts"
 	ActionGetSnapCounts               = "get_snap_counts"
+	ActionSyncPlayerStats             = "sync_player_stats"
+	ActionGetPlayerStats              = "get_player_stats"
 	ActionTopDefensiveFreeAgentTrends = "top_defensive_free_agent_trends"
 	ActionAnalyze                     = "analyze"
 )
@@ -77,6 +80,8 @@ type Response struct {
 	IdentitySync             *identitysync.Result      `json:"identity_sync,omitempty"`
 	SnapCountSync            *snapcountsync.Result     `json:"snap_count_sync,omitempty"`
 	SnapCounts               []history.PlayerGameSnaps `json:"snap_counts,omitempty"`
+	PlayerStatsSync          *playerstatsync.Result    `json:"player_stats_sync,omitempty"`
+	PlayerStats              []history.PlayerGameStats `json:"player_stats,omitempty"`
 	DefensiveFreeAgentTrends *freeagenttrends.Result   `json:"defensive_free_agent_trends,omitempty"`
 	Analysis                 *snapshotanalysis.Result  `json:"analysis,omitempty"`
 }
@@ -101,20 +106,32 @@ type SnapCountSyncer interface {
 	Sync(context.Context, snapcountsync.Request) (snapcountsync.Result, error)
 }
 
+type PlayerStatsSyncer interface {
+	Sync(context.Context, playerstatsync.Request) (playerstatsync.Result, error)
+}
+
 type FreeAgentTrendAnalyzer interface {
 	Analyze(context.Context, freeagenttrends.Request) (freeagenttrends.Result, error)
 }
 
 type Handler struct {
-	snapshots       leaguestore.Repository
-	identities      identity.Repository
-	syncer          Syncer
-	syncStarter     SyncStarter
-	identitySyncer  IdentitySyncer
-	snapCountSyncer SnapCountSyncer
-	snapCounts      history.SnapReader
-	freeAgentTrends FreeAgentTrendAnalyzer
-	analyzer        Analyzer
+	snapshots         leaguestore.Repository
+	identities        identity.Repository
+	syncer            Syncer
+	syncStarter       SyncStarter
+	identitySyncer    IdentitySyncer
+	snapCountSyncer   SnapCountSyncer
+	snapCounts        history.SnapReader
+	playerStatsSyncer PlayerStatsSyncer
+	playerStats       history.PlayerStatsReader
+	freeAgentTrends   FreeAgentTrendAnalyzer
+	analyzer          Analyzer
+}
+
+func (h *Handler) WithPlayerStats(syncer PlayerStatsSyncer, reader history.PlayerStatsReader) *Handler {
+	h.playerStatsSyncer = syncer
+	h.playerStats = reader
+	return h
 }
 
 func (h *Handler) WithAnalyzer(analyzer Analyzer) *Handler {
@@ -313,6 +330,28 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 			return Response{}, err
 		}
 		return Response{Action: action, Status: "ok", SnapCounts: records}, nil
+	case ActionSyncPlayerStats:
+		if h.playerStatsSyncer == nil {
+			return Response{}, fmt.Errorf("player-stat sync is not configured")
+		}
+		result, err := h.playerStatsSyncer.Sync(ctx, playerstatsync.Request{Season: request.Season})
+		if err != nil {
+			return Response{}, err
+		}
+		return Response{Action: action, Status: "stored", PlayerStatsSync: &result}, nil
+	case ActionGetPlayerStats:
+		if h.playerStats == nil {
+			return Response{}, fmt.Errorf("player-stat repository is not configured")
+		}
+		seasons := request.Seasons
+		if len(seasons) == 0 && request.Season != 0 {
+			seasons = []int{request.Season}
+		}
+		records, err := h.playerStats.PlayerGameStats(ctx, history.PlayerStatsQuery{PlayerIDs: request.PlayerIDs, Seasons: seasons})
+		if err != nil {
+			return Response{}, err
+		}
+		return Response{Action: action, Status: "ok", PlayerStats: records}, nil
 	case ActionTopDefensiveFreeAgentTrends:
 		if h.freeAgentTrends == nil {
 			return Response{}, fmt.Errorf("defensive free-agent trend analysis is not configured")

@@ -31,6 +31,20 @@ dataset-specific companion item when they have a different grain. New model
 inputs should continue to depend on backend history contracts rather than AWS
 or provider schemas.
 
+Comprehensive weekly player stats use a companion item so refreshing one
+dataset cannot overwrite another:
+
+```text
+pk     = PLAYER#<canonical-player-id>
+sk     = GAME#<season>#<zero-padded-week>#<game-id>#PLAYER_STATS
+gsi1pk = PLAYER_STATS#SEASON#<season>
+gsi1sk = PLAYER#<canonical-player-id>#<zero-padded-week>#<game-id>
+```
+
+Stable dimensions are top-level attributes. Every other numeric CSV column is
+stored in the `metrics` map and every non-numeric column in `attributes`, so
+nflverse can add fields without requiring a DynamoDB schema migration.
+
 ## Dataset state
 
 One metadata item is stored per imported season:
@@ -57,3 +71,12 @@ seasons fall back to S3.
 
 Repeat for 2024 and 2025. A second invocation with unchanged nflverse data
 returns `unchanged: true` and `stored_records: 0`.
+
+Backfill the comprehensive weekly statistics with the parallel action:
+
+```json
+{"action":"sync_player_stats","season":2023}
+```
+
+Repeat for 2024 and 2025. The daily EventBridge rule invokes both dataset syncs
+for `nflverse_sync_year`.

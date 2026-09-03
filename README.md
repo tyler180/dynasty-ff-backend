@@ -14,6 +14,7 @@ analysis remains in `dynasty-ff-models` and is consumed through its public
 - `internal/provider/mfl`: MFL MCP adapter and normalization
 - `internal/app/snapshotanalysis`: stored-fact adapter for the public analysis API
 - `internal/app/snapcountsync`: PFR/nflverse defensive snap-count ingestion
+- `internal/app/playerstatsync`: comprehensive nflverse weekly player-stat ingestion
 - `internal/identity`: canonical player identity contracts
 - `internal/storage`: persistence adapters
 - `internal/draftadapter`: conversion into the model's public input API
@@ -297,6 +298,44 @@ The source dataset is provided by the
 [nflverse data project](https://github.com/nflverse/nflverse-data) under
 CC-BY-4.0 and is derived from Pro Football Reference game-level snap counts.
 
+## Comprehensive player statistics
+
+Import the complete weekly player-stat row for a season:
+
+```json
+{
+  "action": "sync_player_stats",
+  "season": 2025
+}
+```
+
+The importer resolves nflverse/GSIS player IDs to canonical player IDs and
+stores passing, rushing, receiving, defensive, return, kicking, punting, and
+fantasy metrics in the player-game DynamoDB table. Numeric source columns are
+stored under `metrics`; non-numeric source columns are retained under
+`attributes`. New nflverse columns are ingested automatically.
+
+The linked `player_stats` release contains the comprehensive weekly CSV through
+2024. The importer automatically falls back to the successor `stats_player`
+release for 2025 and later seasons. Each original CSV is archived by content
+hash under `source-data/nflverse-player-stats/<season>/`.
+
+Query one or more canonical players through Lambda:
+
+```json
+{
+  "action": "get_player_stats",
+  "player_ids": ["player-canonical-id"],
+  "seasons": [2024, 2025]
+}
+```
+
+The authenticated API exposes the same data:
+
+```text
+GET /v1/players/stats?player_ids=player-canonical-id&seasons=2024,2025
+```
+
 Rank the current MFL league's defensive free agents by sustained increases in
 defensive snap participation:
 
@@ -385,4 +424,4 @@ license is obtained. Scheduled sync is disabled by default; set
 `mfl_sync_schedule_expression` only after the identities and credentials are
 ready. The current nflverse season is checked daily by default; set
 `nflverse_sync_schedule_expression = null` to disable it or update
-`nflverse_sync_year` when rolling into a new season.
+`nflverse_sync_year` when nflverse publishes a new season.
