@@ -45,6 +45,21 @@ Stable dimensions are top-level attributes. Every other numeric CSV column is
 stored in the `metrics` map and every non-numeric column in `attributes`, so
 nflverse can add fields without requiring a DynamoDB schema migration.
 
+Depth-chart history uses another companion item:
+
+```text
+pk     = PLAYER#<canonical-player-id>
+sk     = DEPTH#<season>#<weekly-or-timestamped-observation>#<role-signature>
+gsi1pk = DEPTH_CHARTS#SEASON#<season>
+gsi1sk = PLAYER#<canonical-player-id>#<observation>
+```
+
+The role signature separates formation and position slots without exposing
+provider labels in keys. Weekly records are retained as reported through 2024.
+For 2025 onward, consecutive identical snapshots are represented as intervals
+using `observed_at` and `last_seen_at`; depth-rank or position changes create a
+new item.
+
 ## Dataset state
 
 One metadata item is stored per imported season:
@@ -80,3 +95,13 @@ Backfill the comprehensive weekly statistics with the parallel action:
 
 Repeat for 2024 and 2025. The daily EventBridge rule invokes both dataset syncs
 for `nflverse_sync_year`.
+
+Import depth charts independently because nflverse may publish a newer depth
+chart season before weekly player statistics:
+
+```json
+{"action":"sync_depth_charts","season":2026}
+```
+
+The daily EventBridge rule uses `nflverse_depth_chart_sync_year` for this
+dataset.

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tyler180/dynasty-ff-backend/internal/app/depthchartsync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/freeagenttrends"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
@@ -59,6 +60,21 @@ type fakePlayerStats struct {
 	result     []history.PlayerGameStats
 	syncResult playerstatsync.Result
 	query      history.PlayerStatsQuery
+}
+
+type fakeDepthCharts struct {
+	result     []history.DepthChartObservation
+	syncResult depthchartsync.Result
+	query      history.DepthChartQuery
+}
+
+func (f *fakeDepthCharts) Sync(context.Context, depthchartsync.Request) (depthchartsync.Result, error) {
+	return f.syncResult, nil
+}
+
+func (f *fakeDepthCharts) DepthChartObservations(_ context.Context, query history.DepthChartQuery) ([]history.DepthChartObservation, error) {
+	f.query = query
+	return f.result, nil
 }
 
 func (f *fakePlayerStats) Sync(context.Context, playerstatsync.Request) (playerstatsync.Result, error) {
@@ -345,6 +361,35 @@ func TestHandlerSyncsAndReadsPlayerStats(t *testing.T) {
 	})
 	if err != nil || len(response.PlayerStats) != 1 || response.PlayerStats[0].Metrics["def_sacks"] != 1.5 {
 		t.Fatalf("query response/error = %+v / %v", response, err)
+	}
+}
+
+func TestHandlerSyncsAndReadsDepthCharts(t *testing.T) {
+	handler, err := New(&fakeSnapshots{}, &fakeIdentities{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	charts := &fakeDepthCharts{
+		syncResult: depthchartsync.Result{Season: 2026, StoredObservations: 1},
+		result: []history.DepthChartObservation{{
+			PlayerID: "player-1", SourcePlayerID: "00-001", SourceProvider: "gsis", Season: 2026,
+			ObservedAt: time.Date(2026, 9, 8, 0, 0, 0, 0, time.UTC), LastSeenAt: time.Date(2026, 9, 9, 0, 0, 0, 0, time.UTC),
+			Team: "PHI", Position: "LDE", DepthRank: 1, Source: "nflverse-depth-charts",
+		}},
+	}
+	handler.WithDepthCharts(charts, charts)
+	response, err := handler.Handle(context.Background(), Request{Action: ActionSyncDepthCharts, Season: 2026})
+	if err != nil || response.DepthChartSync == nil || response.DepthChartSync.StoredObservations != 1 {
+		t.Fatalf("sync response/error = %+v / %v", response, err)
+	}
+	response, err = handler.Handle(context.Background(), Request{
+		Action: ActionGetDepthCharts, PlayerIDs: []player.ID{"player-1"}, Seasons: []int{2026},
+	})
+	if err != nil || len(response.DepthCharts) != 1 || response.DepthCharts[0].DepthRank != 1 {
+		t.Fatalf("query response/error = %+v / %v", response, err)
+	}
+	if len(charts.query.PlayerIDs) != 1 || charts.query.Seasons[0] != 2026 {
+		t.Fatalf("query = %+v", charts.query)
 	}
 }
 

@@ -66,6 +66,8 @@ func (h *HTTPHandler) Handle(ctx context.Context, event events.APIGatewayV2HTTPR
 		request, err = decodeSnapCountRequest(event.QueryStringParameters)
 	case http.MethodGet + " /v1/players/stats":
 		request, err = decodePlayerStatsRequest(event.QueryStringParameters)
+	case http.MethodGet + " /v1/players/depth-charts":
+		request, err = decodeDepthChartRequest(event.QueryStringParameters)
 	case http.MethodGet + " /v1/free-agents/defensive-trends":
 		request, err = decodeDefensiveFreeAgentTrendRequest(event.QueryStringParameters)
 	default:
@@ -87,6 +89,28 @@ func (h *HTTPHandler) Handle(ctx context.Context, event events.APIGatewayV2HTTPR
 		status = http.StatusAccepted
 	}
 	return jsonHTTPResponse(status, response)
+}
+
+func decodeDepthChartRequest(query map[string]string) (Request, error) {
+	request := Request{Action: ActionGetDepthCharts}
+	for _, value := range strings.Split(query["player_ids"], ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			request.PlayerIDs = append(request.PlayerIDs, player.ID(value))
+		}
+	}
+	for _, value := range strings.Split(query["seasons"], ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			season, err := strconv.Atoi(value)
+			if err != nil {
+				return Request{}, fmt.Errorf("seasons must be comma-separated years")
+			}
+			request.Seasons = append(request.Seasons, season)
+		}
+	}
+	if err := (history.DepthChartQuery{PlayerIDs: request.PlayerIDs, Seasons: request.Seasons}).Validate(); err != nil {
+		return Request{}, err
+	}
+	return request, nil
 }
 
 func decodePlayerStatsRequest(query map[string]string) (Request, error) {

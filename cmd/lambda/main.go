@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	awslambda "github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/tyler180/dynasty-ff-backend/internal/app/depthchartsync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/freeagenttrends"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
@@ -134,6 +135,15 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 	}
 	handler.WithPlayerStats(playerstatsync.Service{
 		Source: playerStatsSource, Identities: identities, Stats: playerGameStats,
+		State: playerGameStats, Archive: snapArchive,
+	}, playerGameStats)
+	depthChartsURL := strings.TrimSpace(os.Getenv("DEPTH_CHARTS_URL_TEMPLATE"))
+	depthChartsSource, err := nflverse.NewDefaultDepthCharts(depthChartsURL)
+	if err != nil {
+		return nil, err
+	}
+	handler.WithDepthCharts(depthchartsync.Service{
+		Source: depthChartsSource, Identities: identities, Charts: playerGameStats,
 		State: playerGameStats, Archive: snapArchive,
 	}, playerGameStats)
 	handler.WithFreeAgentTrends(freeagenttrends.Service{

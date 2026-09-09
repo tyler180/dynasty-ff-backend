@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tyler180/dynasty-ff-backend/internal/app/depthchartsync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/freeagenttrends"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/identitysync"
 	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
@@ -37,6 +38,8 @@ const (
 	ActionGetSnapCounts               = "get_snap_counts"
 	ActionSyncPlayerStats             = "sync_player_stats"
 	ActionGetPlayerStats              = "get_player_stats"
+	ActionSyncDepthCharts             = "sync_depth_charts"
+	ActionGetDepthCharts              = "get_depth_charts"
 	ActionTopDefensiveFreeAgentTrends = "top_defensive_free_agent_trends"
 	ActionAnalyze                     = "analyze"
 )
@@ -69,21 +72,23 @@ type Request struct {
 }
 
 type Response struct {
-	Action                   string                    `json:"action"`
-	Status                   string                    `json:"status"`
-	Snapshot                 *league.Snapshot          `json:"snapshot,omitempty"`
-	Player                   *player.Profile           `json:"player,omitempty"`
-	Warnings                 []string                  `json:"warnings,omitempty"`
-	SyncedAt                 *time.Time                `json:"synced_at,omitempty"`
-	StoredPlayers            int                       `json:"stored_players,omitempty"`
-	StoredAliases            int                       `json:"stored_aliases,omitempty"`
-	IdentitySync             *identitysync.Result      `json:"identity_sync,omitempty"`
-	SnapCountSync            *snapcountsync.Result     `json:"snap_count_sync,omitempty"`
-	SnapCounts               []history.PlayerGameSnaps `json:"snap_counts,omitempty"`
-	PlayerStatsSync          *playerstatsync.Result    `json:"player_stats_sync,omitempty"`
-	PlayerStats              []history.PlayerGameStats `json:"player_stats,omitempty"`
-	DefensiveFreeAgentTrends *freeagenttrends.Result   `json:"defensive_free_agent_trends,omitempty"`
-	Analysis                 *snapshotanalysis.Result  `json:"analysis,omitempty"`
+	Action                   string                          `json:"action"`
+	Status                   string                          `json:"status"`
+	Snapshot                 *league.Snapshot                `json:"snapshot,omitempty"`
+	Player                   *player.Profile                 `json:"player,omitempty"`
+	Warnings                 []string                        `json:"warnings,omitempty"`
+	SyncedAt                 *time.Time                      `json:"synced_at,omitempty"`
+	StoredPlayers            int                             `json:"stored_players,omitempty"`
+	StoredAliases            int                             `json:"stored_aliases,omitempty"`
+	IdentitySync             *identitysync.Result            `json:"identity_sync,omitempty"`
+	SnapCountSync            *snapcountsync.Result           `json:"snap_count_sync,omitempty"`
+	SnapCounts               []history.PlayerGameSnaps       `json:"snap_counts,omitempty"`
+	PlayerStatsSync          *playerstatsync.Result          `json:"player_stats_sync,omitempty"`
+	PlayerStats              []history.PlayerGameStats       `json:"player_stats,omitempty"`
+	DepthChartSync           *depthchartsync.Result          `json:"depth_chart_sync,omitempty"`
+	DepthCharts              []history.DepthChartObservation `json:"depth_charts,omitempty"`
+	DefensiveFreeAgentTrends *freeagenttrends.Result         `json:"defensive_free_agent_trends,omitempty"`
+	Analysis                 *snapshotanalysis.Result        `json:"analysis,omitempty"`
 }
 
 type Syncer interface {
@@ -110,6 +115,10 @@ type PlayerStatsSyncer interface {
 	Sync(context.Context, playerstatsync.Request) (playerstatsync.Result, error)
 }
 
+type DepthChartSyncer interface {
+	Sync(context.Context, depthchartsync.Request) (depthchartsync.Result, error)
+}
+
 type FreeAgentTrendAnalyzer interface {
 	Analyze(context.Context, freeagenttrends.Request) (freeagenttrends.Result, error)
 }
@@ -124,8 +133,16 @@ type Handler struct {
 	snapCounts        history.SnapReader
 	playerStatsSyncer PlayerStatsSyncer
 	playerStats       history.PlayerStatsReader
+	depthChartSyncer  DepthChartSyncer
+	depthCharts       history.DepthChartReader
 	freeAgentTrends   FreeAgentTrendAnalyzer
 	analyzer          Analyzer
+}
+
+func (h *Handler) WithDepthCharts(syncer DepthChartSyncer, reader history.DepthChartReader) *Handler {
+	h.depthChartSyncer = syncer
+	h.depthCharts = reader
+	return h
 }
 
 func (h *Handler) WithPlayerStats(syncer PlayerStatsSyncer, reader history.PlayerStatsReader) *Handler {
@@ -352,6 +369,28 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 			return Response{}, err
 		}
 		return Response{Action: action, Status: "ok", PlayerStats: records}, nil
+	case ActionSyncDepthCharts:
+		if h.depthChartSyncer == nil {
+			return Response{}, fmt.Errorf("depth-chart sync is not configured")
+		}
+		result, err := h.depthChartSyncer.Sync(ctx, depthchartsync.Request{Season: request.Season})
+		if err != nil {
+			return Response{}, err
+		}
+		return Response{Action: action, Status: "stored", DepthChartSync: &result}, nil
+	case ActionGetDepthCharts:
+		if h.depthCharts == nil {
+			return Response{}, fmt.Errorf("depth-chart repository is not configured")
+		}
+		seasons := request.Seasons
+		if len(seasons) == 0 && request.Season != 0 {
+			seasons = []int{request.Season}
+		}
+		records, err := h.depthCharts.DepthChartObservations(ctx, history.DepthChartQuery{PlayerIDs: request.PlayerIDs, Seasons: seasons})
+		if err != nil {
+			return Response{}, err
+		}
+		return Response{Action: action, Status: "ok", DepthCharts: records}, nil
 	case ActionTopDefensiveFreeAgentTrends:
 		if h.freeAgentTrends == nil {
 			return Response{}, fmt.Errorf("defensive free-agent trend analysis is not configured")
