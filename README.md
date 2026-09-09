@@ -15,6 +15,7 @@ analysis remains in `dynasty-ff-models` and is consumed through its public
 - `internal/app/snapshotanalysis`: stored-fact adapter for the public analysis API
 - `internal/app/snapcountsync`: PFR/nflverse defensive snap-count ingestion
 - `internal/app/playerstatsync`: comprehensive nflverse weekly player-stat ingestion
+- `internal/app/depthchartsync`: canonical nflverse depth-chart history ingestion
 - `internal/identity`: canonical player identity contracts
 - `internal/storage`: persistence adapters
 - `internal/draftadapter`: conversion into the model's public input API
@@ -336,6 +337,46 @@ The authenticated API exposes the same data:
 GET /v1/players/stats?player_ids=player-canonical-id&seasons=2024,2025
 ```
 
+## Depth charts
+
+Import one season from nflverse's `depth_charts` release:
+
+```json
+{
+  "action": "sync_depth_charts",
+  "season": 2026
+}
+```
+
+The importer supports both nflverse schemas. Seasons through 2024 contain
+weekly depth-team observations. Seasons from 2025 onward contain timestamped
+ESPN depth-chart snapshots with position slots and ranks. Repeated identical
+snapshots are stored as one stable-role interval with `observed_at` and
+`last_seen_at`; a change in position or rank starts a new observation. This
+preserves promotion history without storing hundreds of thousands of duplicate
+daily rows.
+
+GSIS IDs are resolved to canonical players, with ESPN IDs used when a modern
+row has no GSIS ID. The original CSV is archived under
+`source-data/nflverse-depth-charts/<season>/` and unchanged releases do not
+rewrite DynamoDB.
+
+Query canonical players through Lambda:
+
+```json
+{
+  "action": "get_depth_charts",
+  "player_ids": ["player-canonical-id"],
+  "seasons": [2025, 2026]
+}
+```
+
+The authenticated API exposes the same data:
+
+```text
+GET /v1/players/depth-charts?player_ids=player-canonical-id&seasons=2025,2026
+```
+
 Rank the current MFL league's defensive free agents by sustained increases in
 defensive snap participation:
 
@@ -422,6 +463,7 @@ because it cannot authorize MFL imports. FantasyPros data use is subject to the
 API account's license and must remain personal/non-commercial unless a different
 license is obtained. Scheduled sync is disabled by default; set
 `mfl_sync_schedule_expression` only after the identities and credentials are
-ready. The current nflverse season is checked daily by default; set
+ready. The configured nflverse seasons are checked daily by default; set
 `nflverse_sync_schedule_expression = null` to disable it or update
-`nflverse_sync_year` when nflverse publishes a new season.
+`nflverse_sync_year` and `nflverse_depth_chart_sync_year` when nflverse
+publishes a new season.

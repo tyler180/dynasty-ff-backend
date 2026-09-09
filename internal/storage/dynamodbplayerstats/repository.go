@@ -4,6 +4,8 @@ package dynamodbplayerstats
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"strconv"
@@ -122,6 +124,51 @@ func (r *Repository) PutPlayerGameStats(ctx context.Context, records []history.P
 	return nil
 }
 
+func (r *Repository) PutDepthChartObservations(ctx context.Context, records []history.DepthChartObservation) error {
+	if len(records) == 0 {
+		return fmt.Errorf("at least one depth-chart observation is required")
+	}
+	season := records[0].Season
+	incoming := make(map[string]struct{}, len(records))
+	for _, record := range records {
+		if err := record.Validate(); err != nil {
+			return err
+		}
+		if record.Season != season {
+			return fmt.Errorf("depth-chart observations must belong to one season")
+		}
+		key := playerKey(record.PlayerID) + "\x00" + depthChartKey(record)
+		if _, exists := incoming[key]; exists {
+			return fmt.Errorf("duplicate depth-chart observation key for player %s", record.PlayerID)
+		}
+		incoming[key] = struct{}{}
+	}
+	existing, err := r.indexedKeys(ctx, depthChartSeasonKey(season))
+	if err != nil {
+		return err
+	}
+	for start := 0; start < len(records); start += 25 {
+		end := min(start+25, len(records))
+		writes := make([]types.WriteRequest, 0, end-start)
+		for _, record := range records[start:end] {
+			writes = append(writes, types.WriteRequest{PutRequest: &types.PutRequest{Item: encodeDepthChart(record)}})
+		}
+		if err := r.batchWrite(ctx, writes); err != nil {
+			return fmt.Errorf("write %d depth-chart observations in DynamoDB: %w", season, err)
+		}
+	}
+	deletes := make([]types.WriteRequest, 0)
+	for _, existingKey := range existing {
+		if _, ok := incoming[itemKey(existingKey)]; !ok {
+			deletes = append(deletes, types.WriteRequest{DeleteRequest: &types.DeleteRequest{Key: existingKey}})
+		}
+	}
+	if err := r.batchWrite(ctx, deletes); err != nil {
+		return fmt.Errorf("remove stale %d depth-chart observations from DynamoDB: %w", season, err)
+	}
+	return nil
+}
+
 func (r *Repository) PlayerGameSnaps(ctx context.Context, query history.SnapQuery) ([]history.PlayerGameSnaps, error) {
 	if err := query.Validate(); err != nil {
 		return nil, err
@@ -230,6 +277,96 @@ func (r *Repository) PlayerGameStats(ctx context.Context, query history.PlayerSt
 		}
 		return result[i].PlayerID < result[j].PlayerID
 	})
+	return result, nil
+}
+
+func (r *Repository) DepthChartObservations(ctx context.Context, query history.DepthChartQuery) ([]history.DepthChartObservation, error) {
+	if err := query.Validate(); err != nil {
+		return nil, err
+	}
+	seasons := make(map[int]struct{}, len(query.Seasons))
+	for _, season := range query.Seasons {
+		seasons[season] = struct{}{}
+	}
+	type queryResult struct {
+		records []history.DepthChartObservation
+		err     error
+	}
+	jobs := make(chan player.ID, len(query.PlayerIDs))
+	results := make(chan queryResult, len(query.PlayerIDs))
+	for _, playerID := range query.PlayerIDs {
+		jobs <- playerID
+	}
+	close(jobs)
+	var workers sync.WaitGroup
+	for range min(10, len(query.PlayerIDs)) {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for playerID := range jobs {
+				records, err := r.queryDepthCharts(ctx, playerID, seasons)
+				results <- queryResult{records: records, err: err}
+			}
+		}()
+	}
+	workers.Wait()
+	close(results)
+	var result []history.DepthChartObservation
+	for queried := range results {
+		if queried.err != nil {
+			return nil, queried.err
+		}
+		result = append(result, queried.records...)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Season != result[j].Season {
+			return result[i].Season < result[j].Season
+		}
+		if result[i].Week != result[j].Week {
+			return result[i].Week < result[j].Week
+		}
+		if !result[i].ObservedAt.Equal(result[j].ObservedAt) {
+			return result[i].ObservedAt.Before(result[j].ObservedAt)
+		}
+		if result[i].PositionGroupID != result[j].PositionGroupID {
+			return result[i].PositionGroupID < result[j].PositionGroupID
+		}
+		return result[i].PositionSlot < result[j].PositionSlot
+	})
+	return result, nil
+}
+
+func (r *Repository) queryDepthCharts(ctx context.Context, playerID player.ID, seasons map[int]struct{}) ([]history.DepthChartObservation, error) {
+	var result []history.DepthChartObservation
+	var startKey map[string]types.AttributeValue
+	for {
+		output, err := r.client.Query(ctx, &dynamodb.QueryInput{
+			TableName: aws.String(r.tableName), KeyConditionExpression: aws.String("pk = :pk AND begins_with(sk, :prefix)"),
+			ExpressionAttributeValues: map[string]types.AttributeValue{
+				":pk": stringValue(playerKey(playerID)), ":prefix": stringValue("DEPTH#"),
+			},
+			ExclusiveStartKey: startKey,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("query player %s depth charts from DynamoDB: %w", playerID, err)
+		}
+		for _, item := range output.Items {
+			if optionalString(item, "entity_type") != "player_depth_chart" {
+				continue
+			}
+			record, err := decodeDepthChart(item)
+			if err != nil {
+				return nil, fmt.Errorf("decode player %s depth chart: %w", playerID, err)
+			}
+			if _, ok := seasons[record.Season]; ok {
+				result = append(result, record)
+			}
+		}
+		if len(output.LastEvaluatedKey) == 0 {
+			break
+		}
+		startKey = output.LastEvaluatedKey
+	}
 	return result, nil
 }
 
@@ -397,6 +534,52 @@ func (r *Repository) PutPlayerStatsDatasetState(ctx context.Context, state histo
 	_, err := r.client.PutItem(ctx, &dynamodb.PutItemInput{TableName: aws.String(r.tableName), Item: item})
 	if err != nil {
 		return fmt.Errorf("put %d player-stat dataset state: %w", state.Season, err)
+	}
+	return nil
+}
+
+func (r *Repository) DepthChartDatasetState(ctx context.Context, season int) (history.DepthChartDatasetState, error) {
+	output, err := r.client.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(r.tableName), ConsistentRead: aws.Bool(true), Key: depthChartStateKey(season),
+	})
+	if err != nil {
+		return history.DepthChartDatasetState{}, fmt.Errorf("get %d depth-chart dataset state: %w", season, err)
+	}
+	if len(output.Item) == 0 {
+		return history.DepthChartDatasetState{}, nil
+	}
+	state := history.DepthChartDatasetState{
+		Season: season, SourceVersion: optionalString(output.Item, "source_version"),
+		Version: optionalString(output.Item, "dataset_version"),
+	}
+	state.RecordCount, err = optionalInt(output.Item, "record_count")
+	if err != nil {
+		return history.DepthChartDatasetState{}, err
+	}
+	if raw := optionalString(output.Item, "imported_at"); raw != "" {
+		state.ImportedAt, err = time.Parse(time.RFC3339Nano, raw)
+		if err != nil {
+			return history.DepthChartDatasetState{}, fmt.Errorf("imported_at: %w", err)
+		}
+	}
+	return state, nil
+}
+
+func (r *Repository) PutDepthChartDatasetState(ctx context.Context, state history.DepthChartDatasetState) error {
+	if state.Season < 2001 || state.SourceVersion == "" || state.Version == "" || state.RecordCount < 1 || state.ImportedAt.IsZero() {
+		return fmt.Errorf("complete depth-chart dataset state is required")
+	}
+	item := depthChartStateKey(state.Season)
+	item["entity_type"] = stringValue("dataset_state")
+	item["dataset"] = stringValue("depth_charts")
+	item["season"] = numberValue(state.Season)
+	item["dataset_version"] = stringValue(state.Version)
+	item["source_version"] = stringValue(state.SourceVersion)
+	item["record_count"] = numberValue(state.RecordCount)
+	item["imported_at"] = stringValue(state.ImportedAt.UTC().Format(time.RFC3339Nano))
+	_, err := r.client.PutItem(ctx, &dynamodb.PutItemInput{TableName: aws.String(r.tableName), Item: item})
+	if err != nil {
+		return fmt.Errorf("put %d depth-chart dataset state: %w", state.Season, err)
 	}
 	return nil
 }
@@ -581,6 +764,61 @@ func decodePlayerStats(item map[string]types.AttributeValue) (history.PlayerGame
 	return record, record.Validate()
 }
 
+func encodeDepthChart(record history.DepthChartObservation) map[string]types.AttributeValue {
+	item := map[string]types.AttributeValue{
+		"pk": stringValue(playerKey(record.PlayerID)), "sk": stringValue(depthChartKey(record)),
+		"gsi1pk": stringValue(depthChartSeasonKey(record.Season)), "gsi1sk": stringValue(depthChartSeasonSortKey(record)),
+		"entity_type": stringValue("player_depth_chart"), "player_id": stringValue(string(record.PlayerID)),
+		"source_player_id": stringValue(record.SourcePlayerID), "source_provider": stringValue(record.SourceProvider),
+		"player_name": stringValue(record.PlayerName), "season": numberValue(record.Season), "week": numberValue(record.Week),
+		"game_type": stringValue(record.GameType), "team": stringValue(record.Team),
+		"position_group_id": numberValue(record.PositionGroupID), "position_group": stringValue(record.PositionGroup),
+		"position_id": numberValue(record.PositionID), "position": stringValue(record.Position),
+		"position_name": stringValue(record.PositionName), "position_slot": numberValue(record.PositionSlot),
+		"depth_rank": numberValue(record.DepthRank), "source": stringValue(record.Source),
+		"ingestion_run_id": stringValue(record.IngestionRunID),
+	}
+	if !record.ObservedAt.IsZero() {
+		item["observed_at"] = stringValue(record.ObservedAt.UTC().Format(time.RFC3339Nano))
+		item["last_seen_at"] = stringValue(record.LastSeenAt.UTC().Format(time.RFC3339Nano))
+	}
+	return item
+}
+
+func decodeDepthChart(item map[string]types.AttributeValue) (history.DepthChartObservation, error) {
+	record := history.DepthChartObservation{
+		PlayerID: player.ID(optionalString(item, "player_id")), SourcePlayerID: optionalString(item, "source_player_id"),
+		SourceProvider: optionalString(item, "source_provider"), PlayerName: optionalString(item, "player_name"),
+		GameType: optionalString(item, "game_type"), Team: optionalString(item, "team"),
+		PositionGroup: optionalString(item, "position_group"), Position: optionalString(item, "position"),
+		PositionName: optionalString(item, "position_name"), Source: optionalString(item, "source"),
+		IngestionRunID: optionalString(item, "ingestion_run_id"),
+	}
+	var err error
+	for name, target := range map[string]*int{
+		"season": &record.Season, "week": &record.Week, "position_group_id": &record.PositionGroupID,
+		"position_id": &record.PositionID, "position_slot": &record.PositionSlot, "depth_rank": &record.DepthRank,
+	} {
+		*target, err = optionalInt(item, name)
+		if err != nil {
+			return history.DepthChartObservation{}, err
+		}
+	}
+	if raw := optionalString(item, "observed_at"); raw != "" {
+		record.ObservedAt, err = time.Parse(time.RFC3339Nano, raw)
+		if err != nil {
+			return history.DepthChartObservation{}, fmt.Errorf("observed_at: %w", err)
+		}
+	}
+	if raw := optionalString(item, "last_seen_at"); raw != "" {
+		record.LastSeenAt, err = time.Parse(time.RFC3339Nano, raw)
+		if err != nil {
+			return history.DepthChartObservation{}, fmt.Errorf("last_seen_at: %w", err)
+		}
+	}
+	return record, record.Validate()
+}
+
 func playerKey(id player.ID) string { return "PLAYER#" + string(id) }
 func seasonKey(season int) string   { return fmt.Sprintf("SEASON#%04d", season) }
 func gameKey(record history.PlayerGameSnaps) string {
@@ -598,11 +836,34 @@ func playerStatsGameKey(record history.PlayerGameStats) string {
 func playerStatsSeasonSortKey(record history.PlayerGameStats) string {
 	return fmt.Sprintf("PLAYER#%s#%02d#%s", record.PlayerID, record.Week, record.GameID)
 }
+func depthChartSeasonKey(season int) string {
+	return fmt.Sprintf("DEPTH_CHARTS#SEASON#%04d", season)
+}
+func depthChartKey(record history.DepthChartObservation) string {
+	if record.Week > 0 {
+		return fmt.Sprintf("DEPTH#%04d#W#%02d#%s", record.Season, record.Week, depthChartSignature(record))
+	}
+	return fmt.Sprintf("DEPTH#%04d#T#%s#%s", record.Season, record.ObservedAt.UTC().Format("20060102T150405.000000000Z"), depthChartSignature(record))
+}
+func depthChartSeasonSortKey(record history.DepthChartObservation) string {
+	return fmt.Sprintf("PLAYER#%s#%s", record.PlayerID, strings.TrimPrefix(depthChartKey(record), "DEPTH#"))
+}
+func depthChartSignature(record history.DepthChartObservation) string {
+	payload := strings.Join([]string{
+		record.GameType, record.Team, strconv.Itoa(record.PositionGroupID), record.PositionGroup,
+		strconv.Itoa(record.PositionID), record.Position, record.PositionName, strconv.Itoa(record.PositionSlot),
+	}, "\x00")
+	digest := sha256.Sum256([]byte(payload))
+	return hex.EncodeToString(digest[:8])
+}
 func stateKey(season int) map[string]types.AttributeValue {
 	return map[string]types.AttributeValue{"pk": stringValue("DATASET#SNAP_COUNTS"), "sk": stringValue(seasonKey(season))}
 }
 func playerStatsStateKey(season int) map[string]types.AttributeValue {
 	return map[string]types.AttributeValue{"pk": stringValue("DATASET#PLAYER_STATS"), "sk": stringValue(seasonKey(season))}
+}
+func depthChartStateKey(season int) map[string]types.AttributeValue {
+	return map[string]types.AttributeValue{"pk": stringValue("DATASET#DEPTH_CHARTS"), "sk": stringValue(seasonKey(season))}
 }
 func itemKey(item map[string]types.AttributeValue) string {
 	return optionalString(item, "pk") + "\x00" + optionalString(item, "sk")
@@ -652,3 +913,6 @@ var _ history.SnapDatasetStateStore = (*Repository)(nil)
 var _ history.PlayerStatsReader = (*Repository)(nil)
 var _ history.PlayerStatsWriter = (*Repository)(nil)
 var _ history.PlayerStatsDatasetStateStore = (*Repository)(nil)
+var _ history.DepthChartReader = (*Repository)(nil)
+var _ history.DepthChartWriter = (*Repository)(nil)
+var _ history.DepthChartDatasetStateStore = (*Repository)(nil)

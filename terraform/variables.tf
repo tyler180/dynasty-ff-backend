@@ -43,6 +43,17 @@ variable "nflverse_sync_year" {
   }
 }
 
+variable "nflverse_depth_chart_sync_year" {
+  description = "Current NFL season checked by the scheduled nflverse depth-chart sync"
+  type        = number
+  default     = 2026
+
+  validation {
+    condition     = var.nflverse_depth_chart_sync_year >= 2001 && var.nflverse_depth_chart_sync_year <= 2100
+    error_message = "nflverse_depth_chart_sync_year must be between 2001 and 2100."
+  }
+}
+
 variable "api_jwt_issuer" {
   description = "HTTPS issuer URL for the OIDC provider whose JWTs may call the read-only HTTP API"
   type        = string

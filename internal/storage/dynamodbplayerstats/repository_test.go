@@ -151,3 +151,51 @@ func TestRepositoryStoresPlayerStatsDatasetState(t *testing.T) {
 		t.Fatalf("state = %+v, err = %v", got, err)
 	}
 }
+
+func TestRepositoryStoresAndReadsDepthCharts(t *testing.T) {
+	client := &fakeClient{}
+	repository, _ := New(client, "player-game-stats")
+	record := history.DepthChartObservation{
+		PlayerID: "player-1", SourcePlayerID: "00-001", SourceProvider: "gsis", PlayerName: "A Player",
+		Season: 2026, ObservedAt: time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC),
+		LastSeenAt: time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC), Team: "PHI",
+		PositionGroupID: 16, PositionGroup: "Base 4-3 D", PositionID: 11,
+		Position: "LDE", PositionName: "Left Defensive End", PositionSlot: 1, DepthRank: 1,
+		Source: "nflverse-depth-charts",
+	}
+	if err := repository.PutDepthChartObservations(context.Background(), []history.DepthChartObservation{record}); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.writes) == 0 || client.writes[0].PutRequest == nil {
+		t.Fatalf("writes = %+v", client.writes)
+	}
+	client.queries = nil
+	client.queryItems = []map[string]types.AttributeValue{encodeDepthChart(record), encodePlayerStats(history.PlayerGameStats{
+		PlayerID: "player-1", SourcePlayerID: "00-001", Season: 2026, Week: 1, GameID: "game-1", Source: "test",
+	})}
+	got, err := repository.DepthChartObservations(context.Background(), history.DepthChartQuery{
+		PlayerIDs: []player.ID{"player-1"}, Seasons: []int{2026},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].DepthRank != 1 || got[0].Position != "LDE" || !got[0].LastSeenAt.Equal(record.LastSeenAt) {
+		t.Fatalf("depth charts = %+v", got)
+	}
+}
+
+func TestRepositoryStoresDepthChartDatasetState(t *testing.T) {
+	client := &fakeClient{}
+	repository, _ := New(client, "player-game-stats")
+	want := history.DepthChartDatasetState{
+		Season: 2026, SourceVersion: "sha256:source", Version: "sha256:normalized", RecordCount: 42,
+		ImportedAt: time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC),
+	}
+	if err := repository.PutDepthChartDatasetState(context.Background(), want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := repository.DepthChartDatasetState(context.Background(), 2026)
+	if err != nil || got != want {
+		t.Fatalf("state = %+v, err = %v", got, err)
+	}
+}

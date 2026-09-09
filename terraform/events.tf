@@ -74,6 +74,18 @@ resource "aws_cloudwatch_event_target" "nflverse_player_stats_sync" {
   })
 }
 
+resource "aws_cloudwatch_event_target" "nflverse_depth_charts_sync" {
+  count = local.nflverse_sync_schedule_enabled ? 1 : 0
+
+  rule      = aws_cloudwatch_event_rule.nflverse_sync[0].name
+  arn       = module.ff_backend_lambda.lambda_function_arn
+  target_id = "depth-charts"
+  input = jsonencode({
+    action = "sync_depth_charts"
+    season = var.nflverse_depth_chart_sync_year
+  })
+}
+
 resource "aws_lambda_permission" "nflverse_sync" {
   count = local.nflverse_sync_schedule_enabled ? 1 : 0
 
