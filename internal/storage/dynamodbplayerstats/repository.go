@@ -63,6 +63,9 @@ func (r *Repository) PutPlayerGameSnaps(ctx context.Context, records []history.P
 			return fmt.Errorf("player-game records must belong to one season")
 		}
 		item := encode(record)
+		if _, exists := incoming[itemKey(item)]; exists {
+			return fmt.Errorf("duplicate snap key for canonical player %s season %d week %d game %s (PFR player %s)", record.PlayerID, record.Season, record.Week, record.GameID, record.SourcePlayerID)
+		}
 		writes = append(writes, types.WriteRequest{PutRequest: &types.PutRequest{Item: item}})
 		incoming[itemKey(item)] = struct{}{}
 	}

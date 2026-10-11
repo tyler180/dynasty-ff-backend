@@ -1,4 +1,4 @@
-FROM golang:1.26 AS build
+FROM golang:1.26.8 AS build
 WORKDIR /src/dynasty-ff-backend
 # Copy go modules first to leverage layer caching
 COPY dynasty-ff-backend/go.mod dynasty-ff-backend/go.sum ./
@@ -23,8 +23,10 @@ ENV CGO_ENABLED=0
 RUN GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -trimpath -ldflags "-s -w" -o /out/bootstrap ./cmd/lambda
 RUN cd /src/mfl-mcp && GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o /out/mfl-mcp ./cmd/mfl-mcp
 
-FROM public.ecr.aws/lambda/provided:al2023
+FROM public.ecr.aws/lambda/provided:al2.2026.09.17.11
 COPY --from=build /out/bootstrap ./bootstrap
 COPY --from=build /out/mfl-mcp ./mfl-mcp
 COPY --from=build /src/dynasty-ff-backend/config ./config
+# Use an unprivileged UID/GID when running outside Lambda as well.
+USER 10001:10001
 ENTRYPOINT ["./bootstrap"]
