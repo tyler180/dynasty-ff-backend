@@ -2,6 +2,8 @@ package dynamodbplayerstats
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -197,5 +199,25 @@ func TestRepositoryStoresDepthChartDatasetState(t *testing.T) {
 	got, err := repository.DepthChartDatasetState(context.Background(), 2026)
 	if err != nil || got != want {
 		t.Fatalf("state = %+v, err = %v", got, err)
+	}
+}
+
+func TestRepositoryRejectsDuplicateSnapKeysBeforeIO(t *testing.T) {
+	client := &fakeClient{}
+	repository, _ := New(client, "player-game-stats")
+	record := history.PlayerGameSnaps{PlayerID: "same-player", SourcePlayerID: "First00", GameID: "game-1", Season: 2025, Week: 1, Source: "nflverse-pfr"}
+	records := []history.PlayerGameSnaps{record}
+	for i := 0; i < 25; i++ {
+		other := record
+		other.PlayerID = player.ID(fmt.Sprintf("other-%d", i))
+		records = append(records, other)
+	}
+	record.SourcePlayerID = "Other00"
+	records = append(records, record)
+	if err := repository.PutPlayerGameSnaps(context.Background(), records); err == nil || !strings.Contains(err.Error(), "same-player") || !strings.Contains(err.Error(), "game-1") {
+		t.Fatalf("error = %v", err)
+	}
+	if len(client.queries) != 0 || len(client.writes) != 0 {
+		t.Fatal("duplicate keys caused DynamoDB IO")
 	}
 }

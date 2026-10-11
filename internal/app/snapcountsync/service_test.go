@@ -2,6 +2,7 @@ package snapcountsync
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -109,5 +110,51 @@ func TestDeriveTeamDefenseSnapsUsesHighestParticipationRow(t *testing.T) {
 	totals := deriveTeamDefenseSnaps(records)
 	if totals[gameTeamKey(records[0])] != 63 || totals[gameTeamKey(records[2])] != 62 {
 		t.Fatalf("totals = %+v", totals)
+	}
+}
+
+func TestSyncHandlesDuplicateCanonicalGameKeys(t *testing.T) {
+	for _, conflict := range []bool{false, true} {
+		name := "identical source rows"
+		if conflict {
+			name = "different source players resolve to one player"
+		}
+		t.Run(name, func(t *testing.T) {
+			first := nflverse.SnapCount{GameID: "game-1", Season: 2025, Week: 1, PFRPlayerID: "First00", Position: "LB", Team: "PHI", DefenseSnaps: 52, DefenseSnapPct: 0.83}
+			second := first
+			if conflict {
+				second.PFRPlayerID = "Other00"
+			}
+			store := &fakeSnaps{}
+			state := &fakeState{}
+			service := Service{
+				Source: fakeSource{first, second},
+				Identities: fakeIdentities{
+					{Provider: player.ProviderPFR, Value: "First00"}: {ID: "same-player"},
+					{Provider: player.ProviderPFR, Value: "Other00"}: {ID: "same-player"},
+				}, Snaps: store, State: state,
+			}
+			result, err := service.Sync(context.Background(), Request{Season: 2025})
+			if conflict {
+				if err == nil || !strings.Contains(err.Error(), "First00") || !strings.Contains(err.Error(), "Other00") || !strings.Contains(err.Error(), "game-1") {
+					t.Fatalf("error = %v", err)
+				}
+				if len(store.facts) != 0 || state.state.Version != "" {
+					t.Fatal("conflicting records were persisted")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(store.facts) != 1 || result.StoredRecords != 1 || state.state.RecordCount != 1 {
+				t.Fatalf("result = %+v, facts = %+v, state = %+v", result, store.facts, state.state)
+			}
+			service.Source = fakeSource{first}
+			next, err := service.Sync(context.Background(), Request{Season: 2025})
+			if err != nil || !next.Unchanged || next.DatasetVersion != result.DatasetVersion {
+				t.Fatalf("deduplicated version changed: %+v, %v", next, err)
+			}
+		})
 	}
 }

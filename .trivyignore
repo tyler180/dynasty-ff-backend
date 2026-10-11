@@ -1,0 +1,5 @@
+# Ignore
+AWS-0066
+AWS-0031 # Mutable because this isn't production stuff.
+AWS-0033 # image encryption is not needed for this
+AWS-0089 # logging not needed

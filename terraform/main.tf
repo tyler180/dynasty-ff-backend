@@ -129,6 +129,7 @@ module "ff_backend_build" {
   source_path      = local.source_path
   docker_file_path = "${local.source_path}/dynasty-ff-backend/Dockerfile"
   platform         = "linux/amd64"
+  scan_on_push     = true
 
   triggers = {
     dir_sha = local.dir_sha

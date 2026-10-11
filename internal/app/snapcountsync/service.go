@@ -97,6 +97,13 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	}
 	runID := now().UTC().Format("20060102T150405.000000000Z")
 	facts := make([]history.PlayerGameSnaps, 0, len(playerGames))
+	type factKey struct {
+		playerID player.ID
+		season   int
+		week     int
+		gameID   string
+	}
+	seenFacts := make(map[factKey]history.PlayerGameSnaps, len(playerGames))
 	for _, record := range playerGames {
 		profile, ok := resolved[player.ExternalID{Provider: player.ProviderPFR, Value: record.PFRPlayerID}]
 		if !ok {
@@ -114,6 +121,16 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 		if err := fact.Validate(); err != nil {
 			return Result{}, fmt.Errorf("normalize PFR player %s game %s: %w", record.PFRPlayerID, record.GameID, err)
 		}
+		key := factKey{fact.PlayerID, fact.Season, fact.Week, fact.GameID}
+		if previous, exists := seenFacts[key]; exists {
+			if previous != fact {
+				return Result{}, fmt.Errorf("conflicting snap records for canonical player %s season %d week %d game %s: PFR players %s (%s, %s) and %s (%s, %s); check source rows and player identity aliases",
+					fact.PlayerID, fact.Season, fact.Week, fact.GameID,
+					previous.SourcePlayerID, previous.PlayerName, previous.Team, fact.SourcePlayerID, fact.PlayerName, fact.Team)
+			}
+			continue
+		}
+		seenFacts[key] = fact
 		facts = append(facts, fact)
 	}
 	result.ResolvedRecords = len(facts)
