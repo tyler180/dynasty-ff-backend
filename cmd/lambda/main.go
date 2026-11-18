@@ -43,6 +43,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println("Starting the lambda...")
 	lambda.Start(entrypoint.Handle)
 }
 

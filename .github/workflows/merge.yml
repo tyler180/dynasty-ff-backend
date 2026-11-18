@@ -1,9 +1,7 @@
 name: PR Merge
 
 on:
-  pull_request:
-    types:
-      - closed
+  push:
     branches:
       - main
 
@@ -19,8 +17,10 @@ env:
 jobs:
   terraform:
     name: Terraform
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    # Gives the OIDC token an environment-scoped sub claim and lets GitHub
+    # enforce required reviewers / branch rules before the apply runs.
+    environment: production
     env:
       TF_VAR_api_key: ${{ secrets.TF_VAR_API_KEY }}
       TF_VAR_fantasypros_api_key: ${{ secrets.TF_VAR_FANTASYPROS_API_KEY }}
@@ -31,13 +31,31 @@ jobs:
     permissions:
       contents: read
       actions: read
+      pull-requests: read
       id-token: write
 
     steps:
+      - name: Find merged PR head SHA
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A push event has no pull_request payload; resolve the PR that
+          # produced this commit (works for merge, squash and rebase merges).
+          PR_SHA=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+            --jq '[.[] | select(.merged_at != null and .base.ref == "main")][0].head.sha')
+
+          if [ -z "$PR_SHA" ] || [ "$PR_SHA" = "null" ]; then
+            echo "No merged PR found for commit ${{ github.sha }}; refusing to apply"
+            exit 1
+          fi
+
+          echo "head_sha=$PR_SHA" >> "$GITHUB_OUTPUT"
+
       - name: Checkout backend
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ steps.pr.outputs.head_sha }}
           path: dynasty-ff-backend
 
       - name: Find PR Check workflow run
@@ -45,7 +63,7 @@ jobs:
 
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_SHA: ${{ steps.pr.outputs.head_sha }}
         run: |
           RUN_ID=$(gh run list \
           --repo="${{ github.repository }}" \
