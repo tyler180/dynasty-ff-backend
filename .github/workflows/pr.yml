@@ -146,6 +146,13 @@ jobs:
       - name: Verify AWS identity
         run: aws sts get-caller-identity
 
+      # Pull-only login: the plan role cannot push images.
+      - name: Log in to ECR
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
 
