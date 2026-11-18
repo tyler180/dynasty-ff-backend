@@ -33,10 +33,13 @@ provider "aws" {
 }
 
 provider "docker" {
+  # Credentials come from `docker login` run by the workflow (or locally) under
+  # the role that is executing, and are read when the registry is used. Do not
+  # use data.aws_ecr_authorization_token here: a saved plan freezes the token
+  # issued to the plan role, which then cannot push at apply time.
   registry_auth {
-    address  = format("%v.dkr.ecr.%v.amazonaws.com", data.aws_caller_identity.this.account_id, data.aws_region.current.region)
-    username = data.aws_ecr_authorization_token.token.user_name
-    password = data.aws_ecr_authorization_token.token.password
+    address     = format("%v.dkr.ecr.%v.amazonaws.com", data.aws_caller_identity.this.account_id, data.aws_region.current.region)
+    config_file = pathexpand("~/.docker/config.json")
   }
 }
 
