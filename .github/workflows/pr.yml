@@ -140,7 +140,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: arn:aws:iam::138013422358:role/github-deploy
+          role-to-assume: arn:aws:iam::138013422358:role/github-tf-plan-dynasty-ff-backend
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify AWS identity
@@ -162,7 +162,8 @@ jobs:
         working-directory: dynasty-ff-backend/terraform
 
       - name: Terraform plan
-        run: terraform plan -out=${{ runner.temp }}/dev-plan/tfplan
+        # -lock=false: the plan role is read-only and cannot write the state lock
+        run: terraform plan -lock=false -input=false -out=${{ runner.temp }}/dev-plan/tfplan
         working-directory: dynasty-ff-backend/terraform
 
       - name: Upload Plan Artifact
