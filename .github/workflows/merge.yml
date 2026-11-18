@@ -115,13 +115,13 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: arn:aws:iam::138013422358:role/github-deploy
+          role-to-assume: arn:aws:iam::138013422358:role/github-tf-apply-dynasty-ff-backend
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
 
-      # Push-capable login under github-deploy, used by the docker provider.
+      # Push-capable login under the apply role, used by the docker provider.
       - name: Log in to ECR
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
