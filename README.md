@@ -19,7 +19,7 @@ analysis remains in `dynasty-ff-models` and is consumed through its public
 - `internal/identity`: canonical player identity contracts
 - `internal/storage`: persistence adapters
 - `internal/draftadapter`: conversion into the model's public input API
-- `infrastructure/terraform`: backend deployment resources
+- `terraform`: backend deployment resources
 
 ## Local development
 
