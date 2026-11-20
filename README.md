@@ -19,7 +19,7 @@ analysis remains in `dynasty-ff-models` and is consumed through its public
 - `internal/identity`: canonical player identity contracts
 - `internal/storage`: persistence adapters
 - `internal/draftadapter`: conversion into the model's public input API
-- `infrastructure/terraform`: backend deployment resources
+- `terraform`: backend deployment resources
 
 ## Local development
 
@@ -31,9 +31,9 @@ make test
 make build
 ```
 
-Until the model is versioned remotely, Docker needs the parent directory as
-its build context so it can see both sibling modules. From this repository,
-run:
+Docker needs the parent directory as its build context because the image
+builds against sibling checkouts of `dynasty-ff-models` and `mfl/mfl-mcp`
+(the same layout CI uses). From this repository, run:
 
 ```sh
 make docker-build
