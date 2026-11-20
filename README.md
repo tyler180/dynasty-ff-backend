@@ -31,9 +31,9 @@ make test
 make build
 ```
 
-Until the model is versioned remotely, Docker needs the parent directory as
-its build context so it can see both sibling modules. From this repository,
-run:
+Docker needs the parent directory as its build context because the image
+builds against sibling checkouts of `dynasty-ff-models` and `mfl/mfl-mcp`
+(the same layout CI uses). From this repository, run:
 
 ```sh
 make docker-build
