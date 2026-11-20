@@ -42,7 +42,7 @@ make docker-build
 The equivalent direct command is:
 
 ```sh
-docker build -f Dockerfile -t dynasty-ff-backend:local ..
+docker build --platform linux/amd64 -f Dockerfile -t dynasty-ff-backend:local ..
 ```
 
 Analyze the verified local league snapshot:

@@ -25,7 +25,7 @@ build:
 	go build -o bin/bootstrap ./cmd/lambda
 
 docker-build:
-	docker build -f Dockerfile -t dynasty-ff-backend:local ..
+	docker build --platform linux/amd64 -f Dockerfile -t dynasty-ff-backend:local ..
 
 tf-plan:
 	terraform -chdir=terraform init
