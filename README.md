@@ -466,9 +466,13 @@ secret:
 For MFL, `user_cookie` can replace `api_key`; the owner API key is preferable
 because it cannot authorize MFL imports. FantasyPros data use is subject to the
 API account's license and must remain personal/non-commercial unless a different
-license is obtained. Scheduled sync is disabled by default; set
-`mfl_sync_schedule_expression` only after the identities and credentials are
-ready. The current nflverse season is checked daily by default: when
+license is obtained. MFL team snapshots sync on EventBridge Scheduler around
+the league's blind-bid waiver runs (Sat 11:00, Sun 12:00 and Wed 11:00 ET): once
+about two hours before each run and again 15 minutes after it, September through
+January. `mfl_sync_schedules` holds the cron expressions, evaluated in
+`mfl_sync_schedule_timezone` (`America/New_York`); set it to `{}` to disable
+scheduling. `mfl_sync_year` defaults to null, so the season is derived the same
+way as for nflverse below. The current nflverse season is checked daily by default: when
 `nflverse_sync_year` and `nflverse_depth_chart_sync_year` are unset, the Lambda
 derives the season from the date (September onward is the new season; January
 through August is the previous one). Set either variable to pin a season, or
