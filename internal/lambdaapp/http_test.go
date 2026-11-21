@@ -48,29 +48,45 @@ func TestHTTPHandlerMapsAnalyzeWithoutAcceptingAnAction(t *testing.T) {
 	}
 }
 
-func TestHTTPHandlerMapsSnapshotSyncToFastLiveDraftRefresh(t *testing.T) {
-	actions := &recordingActionHandler{result: Response{Action: ActionStartMFLSync, Status: "accepted"}}
-	handler, err := NewHTTPHandler(actions)
-	if err != nil {
-		t.Fatal(err)
+func TestHTTPHandlerMapsSnapshotSyncModes(t *testing.T) {
+	tests := []struct {
+		name          string
+		body          string
+		wantStatus    int
+		wantLiveDraft bool
+	}{
+		{name: "mode omitted is a team refresh", body: `{"season":2026,"league_id":"79286","franchise_id":"0005"}`, wantStatus: 202},
+		{name: "team", body: `{"season":2026,"league_id":"79286","franchise_id":"0005","mode":"team"}`, wantStatus: 202},
+		{name: "draft", body: `{"season":2026,"league_id":"79286","franchise_id":"0005","mode":"draft"}`, wantStatus: 202, wantLiveDraft: true},
+		{name: "unknown mode", body: `{"season":2026,"league_id":"79286","franchise_id":"0005","mode":"fast"}`, wantStatus: 400},
+		{name: "injected action", body: `{"action":"put_snapshot","season":2026,"league_id":"79286","franchise_id":"0005"}`, wantStatus: 400},
 	}
-	event := httpEvent("POST", "/v1/snapshots/sync")
-	event.Headers = map[string]string{"content-type": "application/json"}
-	event.Body = `{"season":2026,"league_id":"79286","franchise_id":"0005"}`
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actions := &recordingActionHandler{result: Response{Action: ActionStartMFLSync, Status: "accepted"}}
+			handler, err := NewHTTPHandler(actions)
+			if err != nil {
+				t.Fatal(err)
+			}
+			event := httpEvent("POST", "/v1/snapshots/sync")
+			event.Headers = map[string]string{"content-type": "application/json"}
+			event.Body = test.body
 
-	response := handler.Handle(context.Background(), event)
-	if response.StatusCode != 202 {
-		t.Fatalf("status = %d, body = %s", response.StatusCode, response.Body)
-	}
-	request := actions.request
-	if request.Action != ActionStartMFLSync || request.IncludeDraft == nil || !*request.IncludeDraft {
-		t.Fatalf("sync request = %+v", request)
-	}
-
-	event.Body = `{"action":"put_snapshot","season":2026,"league_id":"79286","franchise_id":"0005"}`
-	response = handler.Handle(context.Background(), event)
-	if response.StatusCode != 400 {
-		t.Fatalf("injected action status = %d, want 400", response.StatusCode)
+			response := handler.Handle(context.Background(), event)
+			if response.StatusCode != test.wantStatus {
+				t.Fatalf("status = %d, want %d, body = %s", response.StatusCode, test.wantStatus, response.Body)
+			}
+			if test.wantStatus != 202 {
+				if actions.request.Action != "" {
+					t.Fatalf("rejected request reached handler: %+v", actions.request)
+				}
+				return
+			}
+			request := actions.request
+			if request.Action != ActionStartMFLSync || request.IncludeDraft == nil || !*request.IncludeDraft || request.LiveDraft != test.wantLiveDraft {
+				t.Fatalf("sync request = %+v", request)
+			}
+		})
 	}
 }
 

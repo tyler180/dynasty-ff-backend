@@ -225,21 +225,38 @@ func TestHandlerCanSkipFantasyProsDuringMFLSync(t *testing.T) {
 	}
 }
 
-func TestHandlerStartsAsynchronousDraftSync(t *testing.T) {
-	handler, err := New(&fakeSnapshots{}, &fakeIdentities{})
-	if err != nil {
-		t.Fatal(err)
+func TestHandlerStartsAsynchronousSync(t *testing.T) {
+	tests := []struct {
+		name          string
+		liveDraft     bool
+		wantSkipFP    bool
+		wantTimeout   int
+		wantLiveDraft bool
+	}{
+		{name: "team refresh by default", wantTimeout: 300},
+		{name: "draft day", liveDraft: true, wantSkipFP: true, wantTimeout: 120, wantLiveDraft: true},
 	}
-	var captured Request
-	handler.WithSyncStarter(fakeSyncStarter{request: &captured})
-	response, err := handler.Handle(context.Background(), Request{
-		Action: ActionStartMFLSync, LeagueID: "79286", FranchiseID: "0005", Season: 2026,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if response.Status != "accepted" || captured.Action != ActionSyncMFL || !captured.LiveDraft || !captured.SkipFantasyPros || captured.TimeoutSeconds != 120 {
-		t.Fatalf("response/request = %+v / %+v", response, captured)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			handler, err := New(&fakeSnapshots{}, &fakeIdentities{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var captured Request
+			handler.WithSyncStarter(fakeSyncStarter{request: &captured})
+			response, err := handler.Handle(context.Background(), Request{
+				Action: ActionStartMFLSync, LeagueID: "79286", FranchiseID: "0005", Season: 2026, LiveDraft: test.liveDraft,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if response.Status != "accepted" || captured.Action != ActionSyncMFL ||
+				captured.IncludeDraft == nil || !*captured.IncludeDraft ||
+				captured.LiveDraft != test.wantLiveDraft || captured.SkipFantasyPros != test.wantSkipFP ||
+				captured.TimeoutSeconds != test.wantTimeout {
+				t.Fatalf("response/request = %+v / %+v", response, captured)
+			}
+		})
 	}
 }
 

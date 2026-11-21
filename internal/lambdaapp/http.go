@@ -208,6 +208,7 @@ type snapshotSyncHTTPBody struct {
 	Season      int                `json:"season"`
 	LeagueID    league.ID          `json:"league_id"`
 	FranchiseID league.FranchiseID `json:"franchise_id"`
+	Mode        string             `json:"mode"`
 }
 
 func decodeAnalyzeRequest(event events.APIGatewayV2HTTPRequest) (Request, error) {
@@ -239,10 +240,18 @@ func decodeSnapshotSyncRequest(event events.APIGatewayV2HTTPRequest) (Request, e
 	if err := validateLeagueCoordinates(input.Season, input.LeagueID, input.FranchiseID); err != nil {
 		return Request{}, err
 	}
+	var liveDraft bool
+	switch input.Mode {
+	case "", "team":
+	case "draft":
+		liveDraft = true
+	default:
+		return Request{}, fmt.Errorf("mode must be team or draft")
+	}
 	includeDraft := true
 	return Request{
 		Action: ActionStartMFLSync, Season: input.Season, LeagueID: input.LeagueID,
-		FranchiseID: input.FranchiseID, IncludeDraft: &includeDraft,
+		FranchiseID: input.FranchiseID, IncludeDraft: &includeDraft, LiveDraft: liveDraft,
 	}, nil
 }
 
