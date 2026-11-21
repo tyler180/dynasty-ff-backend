@@ -86,7 +86,7 @@ Set these values for your OIDC provider when planning or applying:
 api_jwt_issuer    = "https://auth.k8s.749rmw.com/application/o/dynasty-ff/"
 api_jwt_audiences = ["dynasty-ff-frontend"]
 api_allowed_origins = [
-  "https://dynasty-ff.749rmw.com",
+  "https://dynasty-ff.k8s.749rmw.com",
   "http://localhost:3000",
 ]
 ```
@@ -101,7 +101,7 @@ Configure these strict redirect URIs on the public Authentik client before
 wiring frontend sign-in:
 
 ```text
-https://dynasty-ff.749rmw.com/auth/callback
+https://dynasty-ff.k8s.749rmw.com/auth/callback
 http://localhost:3000/auth/callback
 ```
 
