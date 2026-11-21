@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/tyler180/dynasty-ff-backend/internal/app/mflingest"
 )
 
 func TestCurrentNFLSeason(t *testing.T) {
@@ -46,6 +48,8 @@ func TestHandlerSyncsDeriveSeasonWhenOmitted(t *testing.T) {
 			handler.now = func() time.Time { return time.Date(2026, time.November, 20, 0, 0, 0, 0, time.UTC) }
 			snaps, stats, charts := &fakeSnapCounts{}, &fakePlayerStats{}, &fakeDepthCharts{}
 			handler.WithSnapCounts(snaps, snaps).WithPlayerStats(stats, stats).WithDepthCharts(charts, charts)
+			var mfl mflingest.Request
+			handler.WithSyncer(fakeSyncer{request: &mfl})
 
 			for _, action := range []string{ActionSyncSnapCounts, ActionSyncPlayerStats, ActionSyncDepthCharts} {
 				if _, err := handler.Handle(context.Background(), Request{Action: action, Season: test.requested}); err != nil {
@@ -54,6 +58,14 @@ func TestHandlerSyncsDeriveSeasonWhenOmitted(t *testing.T) {
 			}
 			if snaps.syncSeason != test.want || stats.syncSeason != test.want || charts.syncSeason != test.want {
 				t.Fatalf("synced seasons = snaps %d, stats %d, charts %d; want %d", snaps.syncSeason, stats.syncSeason, charts.syncSeason, test.want)
+			}
+			if _, err := handler.Handle(context.Background(), Request{
+				Action: ActionSyncMFL, Season: test.requested, LeagueID: "79286", FranchiseID: "0005",
+			}); err != nil {
+				t.Fatalf("%s: %v", ActionSyncMFL, err)
+			}
+			if mfl.Year != test.want {
+				t.Fatalf("MFL sync year = %d, want %d", mfl.Year, test.want)
 			}
 		})
 	}

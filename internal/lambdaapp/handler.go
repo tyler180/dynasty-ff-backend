@@ -302,7 +302,7 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 			includeDraft = *request.IncludeDraft
 		}
 		result, err := h.syncer.Sync(ctx, mflingest.Request{
-			Year: request.Season, LeagueID: string(request.LeagueID), FranchiseID: string(request.FranchiseID),
+			Year: h.syncSeason(request.Season), LeagueID: string(request.LeagueID), FranchiseID: string(request.FranchiseID),
 			LeagueConfigPath: request.LeagueConfigPath, IncludeDraft: includeDraft,
 			LiveDraft: request.LiveDraft, SkipEvaluations: request.SkipFantasyPros, Timeout: timeout,
 		})

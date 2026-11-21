@@ -2,16 +2,37 @@
 #   type = string
 # }
 
-variable "mfl_sync_schedule_expression" {
-  description = "Optional EventBridge schedule expression for read-only MFL sync; null disables scheduling"
+variable "mfl_sync_schedules" {
+  description = "EventBridge Scheduler cron expressions for MFL team snapshot syncs, keyed by a short name, in mfl_sync_schedule_timezone; an empty map disables scheduling. The defaults bracket league 79286's blind-bid waiver runs (Sat 11:00, Sun 12:00 and Wed 11:00 ET) during September through January."
+  type        = map(string)
+  default = {
+    "pre-waiver-sat-wed"  = "cron(0 9 ? 1,9-12 SAT,WED *)"
+    "pre-waiver-sun"      = "cron(0 10 ? 1,9-12 SUN *)"
+    "post-waiver-sat-wed" = "cron(15 11 ? 1,9-12 SAT,WED *)"
+    "post-waiver-sun"     = "cron(15 12 ? 1,9-12 SUN *)"
+  }
+
+  validation {
+    condition     = alltrue([for key, expression in var.mfl_sync_schedules : can(regex("^[a-z0-9-]{1,40}$", key)) && can(regex("^(cron|rate|at)\\(.+\\)$", expression))])
+    error_message = "Schedule names must be 1-40 lowercase letters, digits or hyphens, and each value must be a cron(), rate() or at() expression."
+  }
+}
+
+variable "mfl_sync_schedule_timezone" {
+  description = "IANA time zone for mfl_sync_schedules; MFL league calendars use Eastern time"
   type        = string
-  default     = null
+  default     = "America/New_York"
 }
 
 variable "mfl_sync_year" {
-  description = "MFL season passed to scheduled syncs"
+  description = "MFL season passed to scheduled syncs; null lets the Lambda derive the current season (September onward is the new season)"
   type        = number
-  default     = 2026
+  default     = null
+
+  validation {
+    condition     = var.mfl_sync_year == null ? true : var.mfl_sync_year >= 2000 && var.mfl_sync_year <= 2100
+    error_message = "mfl_sync_year must be null or between 2000 and 2100."
+  }
 }
 
 variable "mfl_sync_league_id" {
