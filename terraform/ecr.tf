@@ -54,8 +54,12 @@ resource "docker_image" "backend" {
 resource "docker_registry_image" "backend" {
   name = docker_image.backend.name
 
+  # Push whenever the source changes or the image is rebuilt for any other
+  # reason, such as a change to the build settings above. Triggering on the
+  # source hash alone would leave a rebuilt image unpushed.
   triggers = {
-    dir_sha = local.dir_sha
+    dir_sha  = local.dir_sha
+    image_id = docker_image.backend.image_id
   }
 }
 
