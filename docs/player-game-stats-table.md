@@ -93,8 +93,8 @@ Backfill the comprehensive weekly statistics with the parallel action:
 {"action":"sync_player_stats","season":2023}
 ```
 
-Repeat for 2024 and 2025. The daily EventBridge rule invokes both dataset syncs
-for `nflverse_sync_year`.
+Repeat for 2024 and 2025. The daily EventBridge rule invokes both dataset syncs for `nflverse_sync_year`,
+or for the derived current season when that variable is unset.
 
 Import depth charts independently because nflverse may publish a newer depth
 chart season before weekly player statistics:
@@ -104,4 +104,4 @@ chart season before weekly player statistics:
 ```
 
 The daily EventBridge rule uses `nflverse_depth_chart_sync_year` for this
-dataset.
+dataset, or the derived current season when that variable is unset.

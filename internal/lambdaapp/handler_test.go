@@ -51,24 +51,28 @@ type fakeFreeAgentTrendAnalyzer struct {
 }
 
 type fakeSnapCounts struct {
+	syncSeason int
 	result     []history.PlayerGameSnaps
 	syncResult snapcountsync.Result
 	query      history.SnapQuery
 }
 
 type fakePlayerStats struct {
+	syncSeason int
 	result     []history.PlayerGameStats
 	syncResult playerstatsync.Result
 	query      history.PlayerStatsQuery
 }
 
 type fakeDepthCharts struct {
+	syncSeason int
 	result     []history.DepthChartObservation
 	syncResult depthchartsync.Result
 	query      history.DepthChartQuery
 }
 
-func (f *fakeDepthCharts) Sync(context.Context, depthchartsync.Request) (depthchartsync.Result, error) {
+func (f *fakeDepthCharts) Sync(_ context.Context, request depthchartsync.Request) (depthchartsync.Result, error) {
+	f.syncSeason = request.Season
 	return f.syncResult, nil
 }
 
@@ -77,7 +81,8 @@ func (f *fakeDepthCharts) DepthChartObservations(_ context.Context, query histor
 	return f.result, nil
 }
 
-func (f *fakePlayerStats) Sync(context.Context, playerstatsync.Request) (playerstatsync.Result, error) {
+func (f *fakePlayerStats) Sync(_ context.Context, request playerstatsync.Request) (playerstatsync.Result, error) {
+	f.syncSeason = request.Season
 	return f.syncResult, nil
 }
 
@@ -86,7 +91,8 @@ func (f *fakePlayerStats) PlayerGameStats(_ context.Context, query history.Playe
 	return f.result, nil
 }
 
-func (f *fakeSnapCounts) Sync(context.Context, snapcountsync.Request) (snapcountsync.Result, error) {
+func (f *fakeSnapCounts) Sync(_ context.Context, request snapcountsync.Request) (snapcountsync.Result, error) {
+	f.syncSeason = request.Season
 	return f.syncResult, nil
 }
 
