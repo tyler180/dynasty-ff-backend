@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/tyler180/dynasty-ff-backend/internal/features/history"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
 )
@@ -108,9 +110,14 @@ func (r *Repository) PlayerGameSnaps(ctx context.Context, query history.SnapQuer
 	}
 	var result []history.PlayerGameSnaps
 	for _, season := range query.Seasons {
-		document, err := r.getSeason(ctx, season)
+		document, found, err := r.getSeason(ctx, season)
 		if err != nil {
 			return nil, err
+		}
+		if !found {
+			// No games have been stored for this season yet, for example a new
+			// league season before its first week; it contributes no facts.
+			continue
 		}
 		for _, record := range document.Records {
 			if _, ok := players[record.PlayerID]; !ok {
@@ -130,24 +137,30 @@ func (r *Repository) PlayerGameSnaps(ctx context.Context, query history.SnapQuer
 
 var _ history.SourceFileWriter = (*Repository)(nil)
 
-func (r *Repository) getSeason(ctx context.Context, season int) (seasonDocument, error) {
+// getSeason reports found=false only when the season document does not exist;
+// every other S3 failure is returned as an error.
+func (r *Repository) getSeason(ctx context.Context, season int) (seasonDocument, bool, error) {
 	output, err := r.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(r.bucket), Key: aws.String(seasonKey(season))})
 	if err != nil {
-		return seasonDocument{}, fmt.Errorf("get %d snap counts from S3: %w", season, err)
+		var notFound *types.NoSuchKey
+		if errors.As(err, &notFound) {
+			return seasonDocument{}, false, nil
+		}
+		return seasonDocument{}, false, fmt.Errorf("get %d snap counts from S3: %w", season, err)
 	}
 	defer output.Body.Close()
 	payload, err := io.ReadAll(output.Body)
 	if err != nil {
-		return seasonDocument{}, fmt.Errorf("read %d snap counts from S3: %w", season, err)
+		return seasonDocument{}, false, fmt.Errorf("read %d snap counts from S3: %w", season, err)
 	}
 	var document seasonDocument
 	if err := json.Unmarshal(payload, &document); err != nil {
-		return seasonDocument{}, fmt.Errorf("decode %d snap counts from S3: %w", season, err)
+		return seasonDocument{}, false, fmt.Errorf("decode %d snap counts from S3: %w", season, err)
 	}
 	if document.SchemaVersion != 1 || document.Season != season {
-		return seasonDocument{}, fmt.Errorf("snap-count document for %d has an unsupported schema or season", season)
+		return seasonDocument{}, false, fmt.Errorf("snap-count document for %d has an unsupported schema or season", season)
 	}
-	return document, nil
+	return document, true, nil
 }
 
 func seasonKey(season int) string {

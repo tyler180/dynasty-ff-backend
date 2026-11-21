@@ -39,8 +39,15 @@ func (f *fakeSnaps) PlayerGameSnaps(_ context.Context, query history.SnapQuery) 
 	for _, id := range query.PlayerIDs {
 		allowed[id] = struct{}{}
 	}
+	seasons := make(map[int]struct{}, len(query.Seasons))
+	for _, season := range query.Seasons {
+		seasons[season] = struct{}{}
+	}
 	var result []history.PlayerGameSnaps
 	for _, fact := range f.facts {
+		if _, ok := seasons[fact.Season]; len(seasons) > 0 && !ok {
+			continue
+		}
 		if _, ok := allowed[fact.PlayerID]; ok {
 			result = append(result, fact)
 		}
@@ -86,7 +93,7 @@ func TestAnalyzeReturnsOnlyTopRisingResolvedFreeAgents(t *testing.T) {
 	}
 }
 
-func TestAnalyzeDefaultsToPriorThreeSeasons(t *testing.T) {
+func TestAnalyzeDefaultsToThreeSeasonsEndingWithLeagueSeason(t *testing.T) {
 	available := fakeFreeAgents{{MFLID: "100", Name: "Player", Position: "LB", PositionGroup: "LB"}}
 	identities := fakeIdentities{
 		{Provider: player.ProviderMFL, Value: "100"}: {ID: "player-1", DisplayName: "Player"},
@@ -98,7 +105,7 @@ func TestAnalyzeDefaultsToPriorThreeSeasons(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(snaps.queries) != 1 || !reflect.DeepEqual(snaps.queries[0].Seasons, []int{2023, 2024, 2025}) {
+	if len(snaps.queries) != 1 || !reflect.DeepEqual(snaps.queries[0].Seasons, []int{2024, 2025, 2026}) {
 		t.Fatalf("snap queries = %+v", snaps.queries)
 	}
 }
@@ -136,5 +143,37 @@ func TestAnalyzePreservesPFRPercentageInWeeklyTrend(t *testing.T) {
 	}
 	if result.Trends[0].Recent.DefenseSnapShare != 0.50 {
 		t.Fatalf("weighted recent window = %+v", result.Trends[0].Recent)
+	}
+}
+
+// Early in a season the comparison windows span the season boundary: the
+// baseline comes from the end of last season and the recent games from this one.
+func TestAnalyzeDefaultSeasonsSpanIntoCurrentSeason(t *testing.T) {
+	available := fakeFreeAgents{{MFLID: "100", Name: "Rising Linebacker", Position: "LB", PositionGroup: "LB"}}
+	identities := fakeIdentities{
+		{Provider: player.ProviderMFL, Value: "100"}: {ID: "player-rising", DisplayName: "Rising Linebacker"},
+	}
+	snaps := &fakeSnaps{}
+	for _, week := range []int{16, 17, 18} {
+		snaps.facts = append(snaps.facts, snapFact("player-rising", week, 12))
+	}
+	for _, week := range []int{1, 2, 3} {
+		fact := snapFact("player-rising", week, 45)
+		fact.Season, fact.GameID = 2026, "2026_"+string(rune('A'+week))
+		snaps.facts = append(snaps.facts, fact)
+	}
+
+	result, err := (Service{FreeAgents: available, Identities: identities, Snaps: snaps}).Analyze(context.Background(), Request{
+		Year: 2026, LeagueID: "79286",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Trends) != 1 {
+		t.Fatalf("trends = %+v", result.Trends)
+	}
+	trend := result.Trends[0]
+	if trend.LatestSeason != 2026 || trend.LatestWeek != 3 || trend.Baseline.Games != 3 || trend.Recent.Games != 3 {
+		t.Fatalf("trend windows = latest %d week %d, baseline %+v, recent %+v", trend.LatestSeason, trend.LatestWeek, trend.Baseline, trend.Recent)
 	}
 }
