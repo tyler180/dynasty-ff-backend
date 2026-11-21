@@ -150,7 +150,9 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 
 func normalizedSeasons(year int, seasons []int) []int {
 	if len(seasons) == 0 {
-		return []int{year - 3, year - 2, year - 1}
+		// Include the league season itself so the most recent games are used; the
+		// model windows span season boundaries early in a season.
+		return []int{year - 2, year - 1, year}
 	}
 	unique := make(map[int]struct{}, len(seasons))
 	for _, season := range seasons {

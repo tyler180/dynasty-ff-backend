@@ -394,7 +394,9 @@ The action reads the live MFL free-agent pool, resolves MFL IDs through the
 canonical identity table, queries the requested player histories from DynamoDB,
 and returns only the highest-ranked `rising` signals. Seasons that have not yet
 been migrated transparently fall back to the S3 archive. When `seasons` is
-omitted, it defaults to the three seasons before the requested league season;
+omitted, it defaults to the requested league season and the two before it, so
+the latest games are always included and the windows can span into the prior
+season early in a season;
 `limit` defaults to 10.
 The model compares a raw-snap-weighted three-game baseline with the three most
 recent games. PFR's stored per-game `defense_snap_pct` is used directly in
@@ -405,7 +407,7 @@ the weekly trend and is used to confirm that at least two recent games show a
 The authenticated API exposes the same result:
 
 ```text
-GET /v1/free-agents/defensive-trends?season=2026&league_id=79286&seasons=2023,2024,2025&limit=10
+GET /v1/free-agents/defensive-trends?season=2026&league_id=79286&seasons=2024,2025,2026&limit=10
 ```
 
 Analyze the latest stored snapshot by joining its canonical roster IDs to the
