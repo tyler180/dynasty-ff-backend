@@ -33,23 +33,23 @@ variable "nflverse_sync_schedule_expression" {
 }
 
 variable "nflverse_sync_year" {
-  description = "Latest NFL season currently published and checked by scheduled nflverse syncs"
+  description = "NFL season checked by scheduled nflverse snap-count and player-stat syncs; null lets the Lambda derive the current season (September onward is the new season)"
   type        = number
-  default     = 2025
+  default     = null
 
   validation {
-    condition     = var.nflverse_sync_year >= 2012 && var.nflverse_sync_year <= 2100
+    condition     = var.nflverse_sync_year == null ? true : var.nflverse_sync_year >= 2012 && var.nflverse_sync_year <= 2100
     error_message = "nflverse_sync_year must be between 2012 and 2100."
   }
 }
 
 variable "nflverse_depth_chart_sync_year" {
-  description = "Current NFL season checked by the scheduled nflverse depth-chart sync"
+  description = "NFL season checked by the scheduled nflverse depth-chart sync; null lets the Lambda derive the current season (September onward is the new season)"
   type        = number
-  default     = 2026
+  default     = null
 
   validation {
-    condition     = var.nflverse_depth_chart_sync_year >= 2001 && var.nflverse_depth_chart_sync_year <= 2100
+    condition     = var.nflverse_depth_chart_sync_year == null ? true : var.nflverse_depth_chart_sync_year >= 2001 && var.nflverse_depth_chart_sync_year <= 2100
     error_message = "nflverse_depth_chart_sync_year must be between 2001 and 2100."
   }
 }

@@ -137,6 +137,7 @@ type Handler struct {
 	depthCharts       history.DepthChartReader
 	freeAgentTrends   FreeAgentTrendAnalyzer
 	analyzer          Analyzer
+	now               func() time.Time
 }
 
 func (h *Handler) WithDepthCharts(syncer DepthChartSyncer, reader history.DepthChartReader) *Handler {
@@ -327,7 +328,7 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 		if h.snapCountSyncer == nil {
 			return Response{}, fmt.Errorf("snap-count sync is not configured")
 		}
-		result, err := h.snapCountSyncer.Sync(ctx, snapcountsync.Request{Season: request.Season})
+		result, err := h.snapCountSyncer.Sync(ctx, snapcountsync.Request{Season: h.syncSeason(request.Season)})
 		if err != nil {
 			return Response{}, err
 		}
@@ -351,7 +352,7 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 		if h.playerStatsSyncer == nil {
 			return Response{}, fmt.Errorf("player-stat sync is not configured")
 		}
-		result, err := h.playerStatsSyncer.Sync(ctx, playerstatsync.Request{Season: request.Season})
+		result, err := h.playerStatsSyncer.Sync(ctx, playerstatsync.Request{Season: h.syncSeason(request.Season)})
 		if err != nil {
 			return Response{}, err
 		}
@@ -373,7 +374,7 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 		if h.depthChartSyncer == nil {
 			return Response{}, fmt.Errorf("depth-chart sync is not configured")
 		}
-		result, err := h.depthChartSyncer.Sync(ctx, depthchartsync.Request{Season: request.Season})
+		result, err := h.depthChartSyncer.Sync(ctx, depthchartsync.Request{Season: h.syncSeason(request.Season)})
 		if err != nil {
 			return Response{}, err
 		}

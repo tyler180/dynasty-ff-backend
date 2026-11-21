@@ -463,7 +463,9 @@ because it cannot authorize MFL imports. FantasyPros data use is subject to the
 API account's license and must remain personal/non-commercial unless a different
 license is obtained. Scheduled sync is disabled by default; set
 `mfl_sync_schedule_expression` only after the identities and credentials are
-ready. The configured nflverse seasons are checked daily by default; set
-`nflverse_sync_schedule_expression = null` to disable it or update
-`nflverse_sync_year` and `nflverse_depth_chart_sync_year` when nflverse
-publishes a new season.
+ready. The current nflverse season is checked daily by default: when
+`nflverse_sync_year` and `nflverse_depth_chart_sync_year` are unset, the Lambda
+derives the season from the date (September onward is the new season; January
+through August is the previous one). Set either variable to pin a season, or
+set `nflverse_sync_schedule_expression = null` to disable the schedule. A sync
+request that omits `season` uses the same derived season.
