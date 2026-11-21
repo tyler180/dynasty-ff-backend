@@ -318,10 +318,19 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 			return Response{}, fmt.Errorf("asynchronous MFL sync is not configured")
 		}
 		includeDraft := true
-		if err := h.syncStarter.Start(ctx, Request{
+		// A team refresh is the default: the full roster, cap, free-agent and
+		// FantasyPros sync. LiveDraft selects the quick draft-day refresh, which
+		// skips FantasyPros and requires rookie ADP.
+		syncRequest := Request{
 			Action: ActionSyncMFL, Season: request.Season, LeagueID: request.LeagueID, FranchiseID: request.FranchiseID,
-			IncludeDraft: &includeDraft, LiveDraft: true, SkipFantasyPros: true, TimeoutSeconds: 120,
-		}); err != nil {
+			IncludeDraft: &includeDraft, TimeoutSeconds: 300,
+		}
+		if request.LiveDraft {
+			syncRequest.LiveDraft = true
+			syncRequest.SkipFantasyPros = true
+			syncRequest.TimeoutSeconds = 120
+		}
+		if err := h.syncStarter.Start(ctx, syncRequest); err != nil {
 			return Response{}, err
 		}
 		return Response{Action: action, Status: "accepted"}, nil

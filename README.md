@@ -141,15 +141,21 @@ curl --fail-with-body \
 API errors intentionally omit internal storage and provider details. API Gateway
 access logs contain request metadata but not bearer tokens or request bodies.
 
-`POST /v1/snapshots/sync` is the draft-time refresh path. It queues an asynchronous
-Lambda invocation and returns `202 Accepted`, avoiding API Gateway's synchronous
-integration timeout. The worker always includes live draft data and skips
-FantasyPros calls so availability cannot be blocked by an optional provider. The
-request body contains only the league coordinates; poll `/v1/snapshots/latest`
-until `observed_at` changes, then call `/v1/analyze`.
-Draft-time workers overlay the fresh roster, picks, availability, and rookie ADP
-onto the newest snapshot containing historical points and replacement levels, so
-the fast path does not discard durable analysis inputs.
+`POST /v1/snapshots/sync` queues an asynchronous Lambda invocation and returns
+`202 Accepted`, avoiding API Gateway's synchronous integration timeout. The body
+holds the league coordinates and an optional `mode`:
+
+- `team` (the default): the full refresh of roster, salaries, free agents, draft
+  picks and FantasyPros values. A missing provider, such as FantasyPros or rookie
+  ADP, becomes a warning on the snapshot instead of failing it.
+- `draft`: the quick draft-day refresh. It adds live draft results, skips
+  FantasyPros so a slow provider cannot block a pick, and refuses to store a
+  snapshot when no available rookie has ADP. It overlays the fresh roster, picks,
+  availability and rookie ADP onto the newest snapshot containing historical
+  points and replacement levels, so durable analysis inputs are kept.
+
+Any other `mode` returns `400`. Poll `/v1/snapshots/latest` until `observed_at`
+changes, then call `/v1/analyze`.
 
 Normalized league snapshots support `put_snapshot`, `latest_snapshot`, and
 `snapshot_at`. Snapshot objects are immutable and stored below:
