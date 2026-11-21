@@ -86,7 +86,7 @@ variable "api_allowed_origins" {
   description = "Exact browser origins allowed to call the HTTP API; wildcard origins are rejected because credentials are enabled"
   type        = set(string)
   default = [
-    "https://dynasty-ff.749rmw.com",
+    "https://dynasty-ff.k8s.749rmw.com",
     "http://localhost:3000",
   ]
 
