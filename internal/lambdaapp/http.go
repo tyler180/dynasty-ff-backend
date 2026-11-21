@@ -187,6 +187,12 @@ func decodeDefensiveFreeAgentTrendRequest(query map[string]string) (Request, err
 			return Request{}, fmt.Errorf("limit must be between 1 and 50")
 		}
 	}
+	if value := strings.TrimSpace(query["max_age"]); value != "" {
+		request.MaxAge, err = strconv.Atoi(value)
+		if err != nil || request.MaxAge < 1 || request.MaxAge > 60 {
+			return Request{}, fmt.Errorf("max_age must be between 1 and 60")
+		}
+	}
 	return request, nil
 }
 

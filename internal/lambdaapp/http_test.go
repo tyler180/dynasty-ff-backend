@@ -275,3 +275,39 @@ func httpEvent(method, path string) events.APIGatewayV2HTTPRequest {
 		},
 	}
 }
+
+func TestHTTPHandlerParsesDefensiveFreeAgentTrendMaxAge(t *testing.T) {
+	tests := []struct {
+		name       string
+		maxAge     string
+		wantStatus int
+		wantMaxAge int
+	}{
+		{"omitted means no filter", "", 200, 0},
+		{"valid", "28", 200, 28},
+		{"zero is rejected", "0", 400, 0},
+		{"too large", "61", 400, 0},
+		{"not a number", "young", 400, 0},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actions := &recordingActionHandler{result: Response{Action: ActionTopDefensiveFreeAgentTrends, Status: "ok"}}
+			handler, err := NewHTTPHandler(actions)
+			if err != nil {
+				t.Fatal(err)
+			}
+			event := httpEvent("GET", "/v1/free-agents/defensive-trends")
+			event.QueryStringParameters = map[string]string{"season": "2026", "league_id": "79286"}
+			if test.maxAge != "" {
+				event.QueryStringParameters["max_age"] = test.maxAge
+			}
+			response := handler.Handle(context.Background(), event)
+			if response.StatusCode != test.wantStatus {
+				t.Fatalf("status = %d, want %d (body %s)", response.StatusCode, test.wantStatus, response.Body)
+			}
+			if test.wantStatus == 200 && actions.request.MaxAge != test.wantMaxAge {
+				t.Fatalf("max age = %d, want %d", actions.request.MaxAge, test.wantMaxAge)
+			}
+		})
+	}
+}

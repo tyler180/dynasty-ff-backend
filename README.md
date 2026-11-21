@@ -397,7 +397,10 @@ been migrated transparently fall back to the S3 archive. When `seasons` is
 omitted, it defaults to the requested league season and the two before it, so
 the latest games are always included and the windows can span into the prior
 season early in a season;
-`limit` defaults to 10.
+`limit` defaults to 10. Add `max_age` (1-60) to keep only players younger than that age
+today (UTC): `max_age=28` returns rising free agents under 28. Players with no
+birthdate in the identity table are kept with `age: null`, each trend reports
+the player's `age`, and `excluded_by_age` counts the players removed.
 The model compares a raw-snap-weighted three-game baseline with the three most
 recent games. PFR's stored per-game `defense_snap_pct` is used directly in
 the weekly trend and is used to confirm that at least two recent games show a

@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/tyler180/dynasty-ff-backend/internal/features/history"
 	"github.com/tyler180/dynasty-ff-backend/internal/identity/player"
@@ -175,5 +176,73 @@ func TestAnalyzeDefaultSeasonsSpanIntoCurrentSeason(t *testing.T) {
 	trend := result.Trends[0]
 	if trend.LatestSeason != 2026 || trend.LatestWeek != 3 || trend.Baseline.Games != 3 || trend.Recent.Games != 3 {
 		t.Fatalf("trend windows = latest %d week %d, baseline %+v, recent %+v", trend.LatestSeason, trend.LatestWeek, trend.Baseline, trend.Recent)
+	}
+}
+
+func TestAnalyzeMaxAgeUsesProfileBirthdates(t *testing.T) {
+	born := func(value string) *time.Time {
+		date, err := time.Parse("2006-01-02", value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &date
+	}
+	available := fakeFreeAgents{
+		{MFLID: "100", Name: "Young", Position: "LB", PositionGroup: "LB"},
+		{MFLID: "200", Name: "Veteran", Position: "LB", PositionGroup: "LB"},
+		{MFLID: "300", Name: "Unknown Age", Position: "LB", PositionGroup: "LB"},
+	}
+	identities := fakeIdentities{
+		{Provider: player.ProviderMFL, Value: "100"}: {ID: "young", DisplayName: "Young", BirthDate: born("2000-03-01")},
+		{Provider: player.ProviderMFL, Value: "200"}: {ID: "veteran", DisplayName: "Veteran", BirthDate: born("1996-03-01")},
+		{Provider: player.ProviderMFL, Value: "300"}: {ID: "unknown", DisplayName: "Unknown Age"},
+	}
+	snaps := &fakeSnaps{}
+	for _, id := range []player.ID{"young", "veteran", "unknown"} {
+		for week, count := range []int{10, 12, 14, 50, 52, 54} {
+			fact := snapFact(id, week+1, count)
+			fact.GameID = string(id) + fact.GameID
+			snaps.facts = append(snaps.facts, fact)
+		}
+	}
+	service := Service{
+		FreeAgents: available, Identities: identities, Snaps: snaps,
+		Now: func() time.Time { return time.Date(2026, time.November, 21, 12, 0, 0, 0, time.UTC) },
+	}
+
+	tests := []struct {
+		name         string
+		maxAge       int
+		wantAges     map[string]int // -1 means unknown
+		wantExcluded int
+	}{
+		{"no filter reports every age", 0, map[string]int{"young": 26, "veteran": 30, "unknown": -1}, 0},
+		{"max age 28 drops the veteran and keeps unknown", 28, map[string]int{"young": 26, "unknown": -1}, 1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := service.Analyze(context.Background(), Request{Year: 2026, LeagueID: "79286", Seasons: []int{2025}, MaxAge: test.maxAge})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.ExcludedByAge != test.wantExcluded || len(result.Trends) != len(test.wantAges) {
+				t.Fatalf("excluded = %d, trends = %+v", result.ExcludedByAge, result.Trends)
+			}
+			for _, trend := range result.Trends {
+				want, ok := test.wantAges[trend.PlayerID]
+				switch {
+				case !ok:
+					t.Fatalf("unexpected player %s", trend.PlayerID)
+				case want == -1 && trend.Age != nil:
+					t.Fatalf("%s age = %d, want unknown", trend.PlayerID, *trend.Age)
+				case want >= 0 && (trend.Age == nil || *trend.Age != want):
+					t.Fatalf("%s age = %v, want %d", trend.PlayerID, trend.Age, want)
+				}
+			}
+		})
+	}
+
+	if _, err := service.Analyze(context.Background(), Request{Year: 2026, LeagueID: "79286", MaxAge: 61}); err == nil {
+		t.Fatal("expected max_age above 60 to be rejected")
 	}
 }

@@ -69,6 +69,7 @@ type Request struct {
 	Seasons            []int              `json:"seasons,omitempty"`
 	PositionGroups     []string           `json:"position_groups,omitempty"`
 	Limit              int                `json:"limit,omitempty"`
+	MaxAge             int                `json:"max_age,omitempty"`
 }
 
 type Response struct {
@@ -398,6 +399,7 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 		}
 		result, err := h.freeAgentTrends.Analyze(ctx, freeagenttrends.Request{
 			Year: request.Season, LeagueID: string(request.LeagueID), Seasons: request.Seasons, Limit: request.Limit,
+			MaxAge: request.MaxAge,
 		})
 		if err != nil {
 			return Response{}, err
