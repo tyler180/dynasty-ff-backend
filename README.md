@@ -23,11 +23,7 @@ analysis remains in `dynasty-ff-models` and is consumed through its public
 
 ## Deployment
 
-Merging a PR to `main` applies the Terraform plan saved by that PR's check run,
-and the Lambda image is built from the PR's head commit, not the merge commit.
-A PR whose branch is behind `main` therefore deploys without the commits it is
-missing, rolling back anything merged before it. Update the branch from `main`
-before merging.
+See [docs/deployment.md](docs/deployment.md) for how merges deploy.
 
 ## Local development
 
