@@ -57,19 +57,21 @@ type RecencyWindow struct {
 }
 
 type Result struct {
-	LeagueID                  string              `json:"league_id"`
-	LeagueSeason              int                 `json:"league_season"`
-	SnapSeasons               []int               `json:"snap_seasons"`
-	AvailableDefensivePlayers int                 `json:"available_defensive_players"`
-	ResolvedPlayers           int                 `json:"resolved_players"`
-	PlayersWithSnapData       int                 `json:"players_with_snap_data"`
-	UnresolvedMFLPlayerIDs    []string            `json:"unresolved_mfl_player_ids,omitempty"`
-	ExcludedByAge             int                 `json:"excluded_by_age"`
-	ExcludedByRecency         int                 `json:"excluded_by_recency"`
-	RecencyWindow             *RecencyWindow      `json:"recency_window,omitempty"`
-	Method                    string              `json:"method"`
-	Config                    usage.Config        `json:"config"`
-	Trends                    []usage.PlayerTrend `json:"trends"`
+	LeagueID                  string   `json:"league_id"`
+	LeagueSeason              int      `json:"league_season"`
+	SnapSeasons               []int    `json:"snap_seasons"`
+	AvailableDefensivePlayers int      `json:"available_defensive_players"`
+	ResolvedPlayers           int      `json:"resolved_players"`
+	PlayersWithSnapData       int      `json:"players_with_snap_data"`
+	UnresolvedMFLPlayerIDs    []string `json:"unresolved_mfl_player_ids,omitempty"`
+	ExcludedByAge             int      `json:"excluded_by_age"`
+	// ExcludedByRecency counts players whose recent games fall outside the
+	// window; they are left out of Trends whatever their signal.
+	ExcludedByRecency int                 `json:"excluded_by_recency"`
+	RecencyWindow     *RecencyWindow      `json:"recency_window,omitempty"`
+	Method            string              `json:"method"`
+	Config            usage.Config        `json:"config"`
+	Trends            []usage.PlayerTrend `json:"trends"`
 }
 
 type Service struct {
@@ -167,40 +169,16 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 	for _, fact := range facts {
 		withSnaps[string(fact.PlayerID)] = struct{}{}
 	}
-	resolvedPlayers := len(modelPlayers)
+	// Recency filters the output, not the model input: the model always gets
+	// the full pool, so its config and method are reported as usual.
 	var window *RecencyWindow
-	excludedByRecency := 0
+	stale := map[player.ID]struct{}{}
 	if recencyWeeks > 0 {
 		window, err = s.recencyWindow(ctx, request.Year, recencyWeeks)
 		if err != nil {
 			return Result{}, err
 		}
-		stale := staleByRecency(facts, *window)
-		excludedByRecency = len(stale)
-		kept := modelPlayers[:0]
-		for _, modelPlayer := range modelPlayers {
-			if _, ok := stale[player.ID(modelPlayer.ID)]; !ok {
-				kept = append(kept, modelPlayer)
-			}
-		}
-		modelPlayers = kept
-		keptFacts := facts[:0]
-		for _, fact := range facts {
-			if _, ok := stale[fact.PlayerID]; !ok {
-				keptFacts = append(keptFacts, fact)
-			}
-		}
-		facts = keptFacts
-		if len(modelPlayers) == 0 {
-			// The model rejects an empty pool; nobody is playing now.
-			return Result{
-				LeagueID: request.LeagueID, LeagueSeason: request.Year, SnapSeasons: seasons,
-				AvailableDefensivePlayers: len(available), ResolvedPlayers: resolvedPlayers,
-				PlayersWithSnapData: len(withSnaps), UnresolvedMFLPlayerIDs: unresolved,
-				ExcludedByRecency: excludedByRecency, RecencyWindow: window,
-				Config: usage.Config{MaxAge: request.MaxAge}, Trends: []usage.PlayerTrend{},
-			}, nil
-		}
+		stale = staleByRecency(facts, *window)
 	}
 	observations := make([]usage.Observation, 0, len(facts))
 	for _, fact := range facts {
@@ -227,6 +205,9 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 		if trend.Signal != usage.SignalRising {
 			continue
 		}
+		if _, ok := stale[player.ID(trend.PlayerID)]; ok {
+			continue
+		}
 		top = append(top, trend)
 		if len(top) == limit {
 			break
@@ -234,9 +215,9 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 	}
 	return Result{
 		LeagueID: request.LeagueID, LeagueSeason: request.Year, SnapSeasons: seasons,
-		AvailableDefensivePlayers: len(available), ResolvedPlayers: resolvedPlayers,
+		AvailableDefensivePlayers: len(available), ResolvedPlayers: len(modelPlayers),
 		PlayersWithSnapData: len(withSnaps), UnresolvedMFLPlayerIDs: unresolved,
-		ExcludedByAge: report.Summary.ExcludedByAge, ExcludedByRecency: excludedByRecency, RecencyWindow: window,
+		ExcludedByAge: report.Summary.ExcludedByAge, ExcludedByRecency: len(stale), RecencyWindow: window,
 		Method: report.Method, Config: report.Config, Trends: top,
 	}, nil
 }

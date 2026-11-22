@@ -219,7 +219,11 @@ func TestAnalyzeReturnsEmptyTrendsWhenRecencyExcludesEveryone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ExcludedByRecency != 1 || result.ResolvedPlayers != 1 || result.Trends == nil || len(result.Trends) != 0 {
+	if result.ExcludedByRecency != 1 || result.ResolvedPlayers != 1 || len(result.Trends) != 0 {
 		t.Fatalf("result = %+v", result)
+	}
+	// The frontend reads config.recent_games unconditionally.
+	if result.Config.RecentGames != 3 || result.Method == "" {
+		t.Fatalf("config/method missing: %+v / %q", result.Config, result.Method)
 	}
 }
