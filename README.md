@@ -21,6 +21,10 @@ analysis remains in `dynasty-ff-models` and is consumed through its public
 - `internal/draftadapter`: conversion into the model's public input API
 - `terraform`: backend deployment resources
 
+## Deployment
+
+See [docs/deployment.md](docs/deployment.md) for how merges deploy.
+
 ## Local development
 
 Go 1.26 or newer is expected. For simultaneous local changes across both
