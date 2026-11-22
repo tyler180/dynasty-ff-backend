@@ -87,3 +87,27 @@ func TestSyncFailsWhenScheduleWriteFails(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+type failingSnaps struct{}
+
+func (failingSnaps) PutPlayerGameSnaps(context.Context, []history.PlayerGameSnaps) error {
+	return errors.New("snap write failed")
+}
+
+func TestSyncSkipsScheduleWhenSnapWriteFails(t *testing.T) {
+	schedule := &fakeSchedule{}
+	pfrID := player.ExternalID{Provider: player.ProviderPFR, Value: "DeanNa00"}
+	service := Service{
+		Source: fakeSource{
+			{GameID: "game-1", Season: 2025, Week: 1, PFRPlayerID: "DeanNa00", Position: "LB", Team: "PHI", DefenseSnaps: 52, DefenseSnapPct: 0.83},
+		},
+		Identities: fakeIdentities{pfrID: {ID: "player-dean", DisplayName: "Nakobe Dean"}},
+		Snaps:      failingSnaps{}, Schedule: schedule,
+	}
+	if _, err := service.Sync(context.Background(), Request{Season: 2025}); err == nil {
+		t.Fatal("expected the snap write failure")
+	}
+	if len(schedule.puts) != 0 {
+		t.Fatalf("schedule written for a week whose snaps failed to store: %+v", schedule.puts)
+	}
+}

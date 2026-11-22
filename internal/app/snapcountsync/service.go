@@ -147,15 +147,6 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 	}
 	result.DatasetVersion = version
 	result.SourceVersion = dataset.SourceVersion
-	if s.Schedule != nil {
-		games := deriveSchedule(request.Season, records)
-		if len(games) > 0 {
-			if err := s.Schedule.PutSeasonSchedule(ctx, request.Season, games); err != nil {
-				return Result{}, fmt.Errorf("store %d schedule: %w", request.Season, err)
-			}
-		}
-		result.ScheduledGames = len(games)
-	}
 	if s.State != nil {
 		state, err := s.State.SnapDatasetState(ctx, request.Season)
 		if err != nil {
@@ -163,6 +154,9 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 		}
 		if state.Version == version && state.SourceVersion == dataset.SourceVersion {
 			result.Unchanged = true
+			if result.ScheduledGames, err = s.putSchedule(ctx, request.Season, records); err != nil {
+				return Result{}, err
+			}
 			return result, nil
 		}
 	}
@@ -178,6 +172,11 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 		return Result{}, err
 	}
 	result.StoredRecords = len(facts)
+	// After the snaps, so the schedule never lists a week whose player games
+	// failed to store; before the state, so a failure here retries next run.
+	if result.ScheduledGames, err = s.putSchedule(ctx, request.Season, records); err != nil {
+		return Result{}, err
+	}
 	if s.State != nil {
 		if err := s.State.PutSnapDatasetState(ctx, history.SnapDatasetState{
 			Season: request.Season, SourceVersion: dataset.SourceVersion, Version: version,
@@ -187,6 +186,20 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 		}
 	}
 	return result, nil
+}
+
+func (s Service) putSchedule(ctx context.Context, season int, records []nflverse.SnapCount) (int, error) {
+	if s.Schedule == nil {
+		return 0, nil
+	}
+	games := deriveSchedule(season, records)
+	if len(games) == 0 {
+		return 0, nil
+	}
+	if err := s.Schedule.PutSeasonSchedule(ctx, season, games); err != nil {
+		return 0, fmt.Errorf("store %d schedule: %w", season, err)
+	}
+	return len(games), nil
 }
 
 // deriveSchedule lists each game in the season's feed with the teams that

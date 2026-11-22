@@ -167,6 +167,7 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 	for _, fact := range facts {
 		withSnaps[string(fact.PlayerID)] = struct{}{}
 	}
+	resolvedPlayers := len(modelPlayers)
 	var window *RecencyWindow
 	excludedByRecency := 0
 	if recencyWeeks > 0 {
@@ -190,6 +191,16 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 			}
 		}
 		facts = keptFacts
+		if len(modelPlayers) == 0 {
+			// The model rejects an empty pool; nobody is playing now.
+			return Result{
+				LeagueID: request.LeagueID, LeagueSeason: request.Year, SnapSeasons: seasons,
+				AvailableDefensivePlayers: len(available), ResolvedPlayers: resolvedPlayers,
+				PlayersWithSnapData: len(withSnaps), UnresolvedMFLPlayerIDs: unresolved,
+				ExcludedByRecency: excludedByRecency, RecencyWindow: window,
+				Config: usage.Config{MaxAge: request.MaxAge}, Trends: []usage.PlayerTrend{},
+			}, nil
+		}
 	}
 	observations := make([]usage.Observation, 0, len(facts))
 	for _, fact := range facts {
@@ -223,7 +234,7 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 	}
 	return Result{
 		LeagueID: request.LeagueID, LeagueSeason: request.Year, SnapSeasons: seasons,
-		AvailableDefensivePlayers: len(available), ResolvedPlayers: len(modelPlayers),
+		AvailableDefensivePlayers: len(available), ResolvedPlayers: resolvedPlayers,
 		PlayersWithSnapData: len(withSnaps), UnresolvedMFLPlayerIDs: unresolved,
 		ExcludedByAge: report.Summary.ExcludedByAge, ExcludedByRecency: excludedByRecency, RecencyWindow: window,
 		Method: report.Method, Config: report.Config, Trends: top,

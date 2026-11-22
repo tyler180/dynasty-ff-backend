@@ -150,8 +150,8 @@ func TestAnalyzeExcludesFreeAgentsWithoutRecentGames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ExcludedByRecency != 1 || result.PlayersWithSnapData != 2 {
-		t.Fatalf("excluded by recency = %d, players with snap data = %d", result.ExcludedByRecency, result.PlayersWithSnapData)
+	if result.ExcludedByRecency != 1 || result.PlayersWithSnapData != 2 || result.ResolvedPlayers != 2 {
+		t.Fatalf("excluded by recency = %d, players with snap data = %d, resolved = %d", result.ExcludedByRecency, result.PlayersWithSnapData, result.ResolvedPlayers)
 	}
 	if result.RecencyWindow == nil || *result.RecencyWindow != (RecencyWindow{Weeks: 6, FromSeason: 2026, FromWeek: 6}) {
 		t.Fatalf("recency window = %+v", result.RecencyWindow)
@@ -200,5 +200,26 @@ func TestAnalyzeRecencyOffSkipsSchedule(t *testing.T) {
 	}
 	if result.RecencyWindow != nil || result.ExcludedByRecency != 0 {
 		t.Fatalf("recency should be off: %+v", result)
+	}
+}
+
+func TestAnalyzeReturnsEmptyTrendsWhenRecencyExcludesEveryone(t *testing.T) {
+	snaps := &fakeSnaps{}
+	for week := 1; week <= 6; week++ {
+		fact := snapFact("player-1", week, 40)
+		fact.Season = 2025
+		snaps.facts = append(snaps.facts, fact)
+	}
+	service := Service{
+		FreeAgents: fakeFreeAgents{{MFLID: "100", Name: "Player", Position: "LB", PositionGroup: "LB"}},
+		Identities: fakeIdentities{{Provider: player.ProviderMFL, Value: "100"}: {ID: "player-1", DisplayName: "Player"}},
+		Snaps:      snaps, Schedule: &fakeSchedule{games: weeksPlayed(2026, 1, 11, "REG")},
+	}
+	result, err := service.Analyze(context.Background(), Request{Year: 2026, LeagueID: "79286"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ExcludedByRecency != 1 || result.ResolvedPlayers != 1 || result.Trends == nil || len(result.Trends) != 0 {
+		t.Fatalf("result = %+v", result)
 	}
 }
