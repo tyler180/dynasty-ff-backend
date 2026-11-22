@@ -410,7 +410,7 @@ func (h *Handler) Handle(ctx context.Context, request Request) (Response, error)
 		}
 		result, err := h.freeAgentTrends.Analyze(ctx, freeagenttrends.Request{
 			Year: request.Season, LeagueID: string(request.LeagueID), Seasons: request.Seasons, Limit: request.Limit,
-			MaxAge: request.MaxAge, RecencyWeeks: request.RecencyWeeks,
+			MaxAge: request.MaxAge, RecencyWeeks: request.RecencyWeeks, PositionGroups: request.PositionGroups,
 		})
 		if err != nil {
 			return Response{}, err

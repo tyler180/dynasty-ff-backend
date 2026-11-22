@@ -421,6 +421,12 @@ Postseason games count for neither the window nor the player. The response
 reports `recency_window` (`from_season`/`from_week`) and `excluded_by_recency`.
 Bye weeks are not yet accounted for.
 
+Add `position_groups` (comma-separated `DL`, `LB`, `DB`) to show only those
+groups, using the player's MFL position: `position_groups=LB` returns the top
+rising linebackers. Like recency, it filters the ranked list, so `limit`
+counts players in the chosen groups. The response echoes `position_groups`
+when a filter is set.
+
 The model compares a raw-snap-weighted three-game baseline with the three most
 recent games. PFR's stored per-game `defense_snap_pct` is used directly in
 the weekly trend and is used to confirm that at least two recent games show a
