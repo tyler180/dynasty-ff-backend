@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -323,6 +324,44 @@ func TestHTTPHandlerParsesDefensiveFreeAgentTrendMaxAge(t *testing.T) {
 			}
 			if test.wantStatus == 200 && actions.request.MaxAge != test.wantMaxAge {
 				t.Fatalf("max age = %d, want %d", actions.request.MaxAge, test.wantMaxAge)
+			}
+		})
+	}
+}
+
+func TestHTTPHandlerParsesDefensiveFreeAgentTrendRecencyWeeks(t *testing.T) {
+	weeks := func(value int) *int { return &value }
+	tests := []struct {
+		name       string
+		value      string
+		wantStatus int
+		want       *int
+	}{
+		{"omitted uses the service default", "", 200, nil},
+		{"valid", "4", 200, weeks(4)},
+		{"zero turns the filter off", "0", 200, weeks(0)},
+		{"negative", "-1", 400, nil},
+		{"too large", "19", 400, nil},
+		{"not a number", "recent", 400, nil},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actions := &recordingActionHandler{result: Response{Action: ActionTopDefensiveFreeAgentTrends, Status: "ok"}}
+			handler, err := NewHTTPHandler(actions)
+			if err != nil {
+				t.Fatal(err)
+			}
+			event := httpEvent("GET", "/v1/free-agents/defensive-trends")
+			event.QueryStringParameters = map[string]string{"season": "2026", "league_id": "79286"}
+			if test.value != "" {
+				event.QueryStringParameters["recency_weeks"] = test.value
+			}
+			response := handler.Handle(context.Background(), event)
+			if response.StatusCode != test.wantStatus {
+				t.Fatalf("status = %d, want %d (body %s)", response.StatusCode, test.wantStatus, response.Body)
+			}
+			if test.wantStatus == 200 && !reflect.DeepEqual(actions.request.RecencyWeeks, test.want) {
+				t.Fatalf("recency weeks = %v, want %v", actions.request.RecencyWeeks, test.want)
 			}
 		})
 	}

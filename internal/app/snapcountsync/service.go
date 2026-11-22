@@ -38,6 +38,7 @@ type Result struct {
 	Unchanged             bool     `json:"unchanged"`
 	UnmatchedPFRPlayers   int      `json:"unmatched_pfr_players"`
 	UnmatchedPFRPlayerIDs []string `json:"unmatched_pfr_player_ids,omitempty"`
+	ScheduledGames        int      `json:"scheduled_games"`
 }
 
 type Service struct {
@@ -46,7 +47,10 @@ type Service struct {
 	Snaps      history.SnapWriter
 	State      history.SnapDatasetStateStore
 	Archive    history.SourceFileWriter
-	Now        func() time.Time
+	// Schedule, when set, receives the season's played games on every sync,
+	// including unchanged ones, so earlier seasons backfill by re-running.
+	Schedule history.ScheduleWriter
+	Now      func() time.Time
 }
 
 func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
@@ -150,6 +154,9 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 		}
 		if state.Version == version && state.SourceVersion == dataset.SourceVersion {
 			result.Unchanged = true
+			if result.ScheduledGames, err = s.putSchedule(ctx, request.Season, records); err != nil {
+				return Result{}, err
+			}
 			return result, nil
 		}
 	}
@@ -165,6 +172,11 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 		return Result{}, err
 	}
 	result.StoredRecords = len(facts)
+	// After the snaps, so the schedule never lists a week whose player games
+	// failed to store; before the state, so a failure here retries next run.
+	if result.ScheduledGames, err = s.putSchedule(ctx, request.Season, records); err != nil {
+		return Result{}, err
+	}
 	if s.State != nil {
 		if err := s.State.PutSnapDatasetState(ctx, history.SnapDatasetState{
 			Season: request.Season, SourceVersion: dataset.SourceVersion, Version: version,
@@ -174,6 +186,65 @@ func (s Service) Sync(ctx context.Context, request Request) (Result, error) {
 		}
 	}
 	return result, nil
+}
+
+func (s Service) putSchedule(ctx context.Context, season int, records []nflverse.SnapCount) (int, error) {
+	if s.Schedule == nil {
+		return 0, nil
+	}
+	games := deriveSchedule(season, records)
+	if len(games) == 0 {
+		return 0, nil
+	}
+	if err := s.Schedule.PutSeasonSchedule(ctx, season, games); err != nil {
+		return 0, fmt.Errorf("store %d schedule: %w", season, err)
+	}
+	return len(games), nil
+}
+
+// deriveSchedule lists each game in the season's feed with the teams that
+// appear in it. All rows count, resolved to a canonical player or not.
+func deriveSchedule(season int, records []nflverse.SnapCount) []history.ScheduledGame {
+	type gameKey struct {
+		week   int
+		gameID string
+	}
+	games := make(map[gameKey]*history.ScheduledGame)
+	teams := make(map[gameKey]map[string]struct{})
+	for _, record := range records {
+		gameID := strings.TrimSpace(record.GameID)
+		if record.Season != season || gameID == "" || record.Week < 1 {
+			continue
+		}
+		key := gameKey{record.Week, gameID}
+		if games[key] == nil {
+			games[key] = &history.ScheduledGame{Season: season, Week: record.Week, GameID: gameID, GameType: record.GameType}
+			teams[key] = make(map[string]struct{})
+		}
+		for _, team := range []string{record.Team, record.Opponent} {
+			if team = strings.TrimSpace(team); team != "" {
+				teams[key][team] = struct{}{}
+			}
+		}
+	}
+	result := make([]history.ScheduledGame, 0, len(games))
+	for key, game := range games {
+		if len(teams[key]) == 0 {
+			continue
+		}
+		for team := range teams[key] {
+			game.Teams = append(game.Teams, team)
+		}
+		sort.Strings(game.Teams)
+		result = append(result, *game)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Week != result[j].Week {
+			return result[i].Week < result[j].Week
+		}
+		return result[i].GameID < result[j].GameID
+	})
+	return result
 }
 
 func datasetVersion(facts []history.PlayerGameSnaps) (string, error) {

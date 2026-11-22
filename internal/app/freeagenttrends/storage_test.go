@@ -58,7 +58,7 @@ func TestAnalyzeDefaultSeasonsWhenLeagueSeasonNotStored(t *testing.T) {
 
 	// League season 2027 before any 2027 games: defaults to 2025-2027, only 2025 is stored.
 	result, err := (Service{FreeAgents: available, Identities: identities, Snaps: repository}).Analyze(context.Background(), Request{
-		Year: 2027, LeagueID: "79286",
+		Year: 2027, LeagueID: "79286", RecencyWeeks: recencyOff(),
 	})
 	if err != nil {
 		t.Fatal(err)

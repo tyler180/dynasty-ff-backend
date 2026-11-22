@@ -75,7 +75,7 @@ func TestAnalyzeReturnsOnlyTopRisingResolvedFreeAgents(t *testing.T) {
 	}
 
 	result, err := (Service{FreeAgents: available, Identities: identities, Snaps: snaps}).Analyze(context.Background(), Request{
-		Year: 2026, LeagueID: "79286", Seasons: []int{2025}, Limit: 10,
+		Year: 2026, LeagueID: "79286", RecencyWeeks: recencyOff(), Seasons: []int{2025}, Limit: 10,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -101,7 +101,7 @@ func TestAnalyzeDefaultsToThreeSeasonsEndingWithLeagueSeason(t *testing.T) {
 	}
 	snaps := &fakeSnaps{}
 	_, err := (Service{FreeAgents: available, Identities: identities, Snaps: snaps}).Analyze(context.Background(), Request{
-		Year: 2026, LeagueID: "79286",
+		Year: 2026, LeagueID: "79286", RecencyWeeks: recencyOff(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -134,7 +134,7 @@ func TestAnalyzePreservesPFRPercentageInWeeklyTrend(t *testing.T) {
 	}
 
 	result, err := (Service{FreeAgents: available, Identities: identities, Snaps: snaps}).Analyze(context.Background(), Request{
-		Year: 2026, LeagueID: "79286", Seasons: []int{2025}, Limit: 10,
+		Year: 2026, LeagueID: "79286", RecencyWeeks: recencyOff(), Seasons: []int{2025}, Limit: 10,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -165,7 +165,7 @@ func TestAnalyzeDefaultSeasonsSpanIntoCurrentSeason(t *testing.T) {
 	}
 
 	result, err := (Service{FreeAgents: available, Identities: identities, Snaps: snaps}).Analyze(context.Background(), Request{
-		Year: 2026, LeagueID: "79286",
+		Year: 2026, LeagueID: "79286", RecencyWeeks: recencyOff(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -221,7 +221,7 @@ func TestAnalyzeMaxAgeUsesProfileBirthdates(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := service.Analyze(context.Background(), Request{Year: 2026, LeagueID: "79286", Seasons: []int{2025}, MaxAge: test.maxAge})
+			result, err := service.Analyze(context.Background(), Request{Year: 2026, LeagueID: "79286", RecencyWeeks: recencyOff(), Seasons: []int{2025}, MaxAge: test.maxAge})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -242,7 +242,13 @@ func TestAnalyzeMaxAgeUsesProfileBirthdates(t *testing.T) {
 		})
 	}
 
-	if _, err := service.Analyze(context.Background(), Request{Year: 2026, LeagueID: "79286", MaxAge: 61}); err == nil {
+	if _, err := service.Analyze(context.Background(), Request{Year: 2026, LeagueID: "79286", RecencyWeeks: recencyOff(), MaxAge: 61}); err == nil {
 		t.Fatal("expected max_age above 60 to be rejected")
 	}
+}
+
+// recencyOff disables the recency filter for tests about other behavior.
+func recencyOff() *int {
+	off := 0
+	return &off
 }

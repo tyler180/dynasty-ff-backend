@@ -129,6 +129,7 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 	}
 	handler.WithSnapCounts(snapcountsync.Service{
 		Source: snapSource, Identities: identities, Snaps: snapWriter, State: playerGameStats, Archive: snapArchive,
+		Schedule: playerGameStats,
 	}, snapCounts)
 	playerStatsSource, err := nflverse.NewDefaultPlayerStats(splitEnvironment("PLAYER_STATS_URL_TEMPLATES"))
 	if err != nil {
@@ -149,7 +150,7 @@ func buildHandler(ctx context.Context) (*lambdaapp.Handler, error) {
 	}, playerGameStats)
 	handler.WithFreeAgentTrends(freeagenttrends.Service{
 		FreeAgents: mflfreeagents.Source{MCPCommand: mcpCommand, Credentials: credentials},
-		Identities: identities, Snaps: snapCounts,
+		Identities: identities, Snaps: snapCounts, Schedule: playerGameStats,
 	})
 	handler.WithSyncStarter(lambdaSyncStarter{
 		client: awslambda.NewFromConfig(awsConfig), functionName: os.Getenv("AWS_LAMBDA_FUNCTION_NAME"),

@@ -411,6 +411,16 @@ season early in a season;
 today (UTC): `max_age=28` returns rising free agents under 28. Players with no
 birthdate in the identity table are kept with `age: null`, each trend reports
 the player's `age`, and `excluded_by_age` counts the players removed.
+
+Players must also be playing now: a free agent's three most recent
+regular-season games must all fall within the last `recency_weeks` NFL
+regular-season weeks played (default 6, max 18, `0` turns the filter off).
+Weeks come from the stored NFL schedule, which `sync_snap_counts` writes for
+each season it syncs, so sync the league season and the one before it.
+Postseason games count for neither the window nor the player. The response
+reports `recency_window` (`from_season`/`from_week`) and `excluded_by_recency`.
+Bye weeks are not yet accounted for.
+
 The model compares a raw-snap-weighted three-game baseline with the three most
 recent games. PFR's stored per-game `defense_snap_pct` is used directly in
 the weekly trend and is used to confirm that at least two recent games show a

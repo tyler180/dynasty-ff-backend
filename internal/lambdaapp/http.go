@@ -193,6 +193,13 @@ func decodeDefensiveFreeAgentTrendRequest(query map[string]string) (Request, err
 			return Request{}, fmt.Errorf("max_age must be between 1 and 60")
 		}
 	}
+	if value := strings.TrimSpace(query["recency_weeks"]); value != "" {
+		weeks, err := strconv.Atoi(value)
+		if err != nil || weeks < 0 || weeks > 18 {
+			return Request{}, fmt.Errorf("recency_weeks must be between 0 (no filter) and 18")
+		}
+		request.RecencyWeeks = &weeks
+	}
 	return request, nil
 }
 

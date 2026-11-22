@@ -449,6 +449,73 @@ func (r *Repository) queryPlayer(ctx context.Context, playerID player.ID, season
 	return result, nil
 }
 
+// PutSeasonSchedule stores a season's games as a single item. One PutItem is
+// atomic, so a failed refresh leaves the previous schedule intact instead of
+// publishing a partial season.
+func (r *Repository) PutSeasonSchedule(ctx context.Context, season int, games []history.ScheduledGame) error {
+	if len(games) == 0 {
+		return fmt.Errorf("at least one scheduled game is required")
+	}
+	seen := make(map[string]struct{}, len(games))
+	encoded := make([]types.AttributeValue, 0, len(games))
+	for _, game := range games {
+		if err := game.Validate(); err != nil {
+			return err
+		}
+		if game.Season != season {
+			return fmt.Errorf("scheduled games must belong to season %d", season)
+		}
+		key := fmt.Sprintf("%02d#%s", game.Week, game.GameID)
+		if _, exists := seen[key]; exists {
+			return fmt.Errorf("duplicate scheduled game %s in season %d week %d", game.GameID, game.Season, game.Week)
+		}
+		seen[key] = struct{}{}
+		encoded = append(encoded, encodeScheduledGame(game))
+	}
+	item := scheduleKey(season)
+	item["entity_type"] = stringValue("season_schedule")
+	item["season"] = numberValue(season)
+	item["games"] = &types.AttributeValueMemberL{Value: encoded}
+	item["updated_at"] = stringValue(time.Now().UTC().Format(time.RFC3339Nano))
+	if _, err := r.client.PutItem(ctx, &dynamodb.PutItemInput{TableName: aws.String(r.tableName), Item: item}); err != nil {
+		return fmt.Errorf("put %d schedule in DynamoDB: %w", season, err)
+	}
+	return nil
+}
+
+func (r *Repository) SeasonSchedules(ctx context.Context, seasons []int) ([]history.ScheduledGame, error) {
+	var result []history.ScheduledGame
+	for _, season := range seasons {
+		output, err := r.client.GetItem(ctx, &dynamodb.GetItemInput{
+			TableName: aws.String(r.tableName), ConsistentRead: aws.Bool(true), Key: scheduleKey(season),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("get %d schedule from DynamoDB: %w", season, err)
+		}
+		if len(output.Item) == 0 {
+			continue
+		}
+		if optionalString(output.Item, "entity_type") != "season_schedule" {
+			return nil, fmt.Errorf("%d schedule item has unexpected entity type %q", season, optionalString(output.Item, "entity_type"))
+		}
+		games, ok := output.Item["games"].(*types.AttributeValueMemberL)
+		if !ok {
+			return nil, fmt.Errorf("%d schedule item has no games list", season)
+		}
+		for index, value := range games.Value {
+			game, err := decodeScheduledGame(value)
+			if err != nil {
+				return nil, fmt.Errorf("decode %d scheduled game %d: %w", season, index, err)
+			}
+			if game.Season != season {
+				return nil, fmt.Errorf("%d schedule item holds a %d game %s", season, game.Season, game.GameID)
+			}
+			result = append(result, game)
+		}
+	}
+	return result, nil
+}
+
 func (r *Repository) SnapDatasetState(ctx context.Context, season int) (history.SnapDatasetState, error) {
 	output, err := r.client.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(r.tableName), ConsistentRead: aws.Bool(true), Key: stateKey(season),
@@ -822,6 +889,40 @@ func decodeDepthChart(item map[string]types.AttributeValue) (history.DepthChartO
 	return record, record.Validate()
 }
 
+func encodeScheduledGame(game history.ScheduledGame) types.AttributeValue {
+	teams := append([]string(nil), game.Teams...)
+	sort.Strings(teams)
+	return &types.AttributeValueMemberM{Value: map[string]types.AttributeValue{
+		"season": numberValue(game.Season), "week": numberValue(game.Week),
+		"game_id": stringValue(game.GameID), "game_type": stringValue(game.GameType),
+		"teams": &types.AttributeValueMemberSS{Value: teams},
+	}}
+}
+
+func decodeScheduledGame(value types.AttributeValue) (history.ScheduledGame, error) {
+	member, ok := value.(*types.AttributeValueMemberM)
+	if !ok {
+		return history.ScheduledGame{}, fmt.Errorf("scheduled game is not a map")
+	}
+	item := member.Value
+	game := history.ScheduledGame{GameID: optionalString(item, "game_id"), GameType: optionalString(item, "game_type")}
+	var err error
+	if game.Season, err = optionalInt(item, "season"); err != nil {
+		return history.ScheduledGame{}, err
+	}
+	if game.Week, err = optionalInt(item, "week"); err != nil {
+		return history.ScheduledGame{}, err
+	}
+	if teams, ok := item["teams"].(*types.AttributeValueMemberSS); ok {
+		game.Teams = append([]string(nil), teams.Value...)
+		sort.Strings(game.Teams)
+	}
+	return game, game.Validate()
+}
+
+func scheduleKey(season int) map[string]types.AttributeValue {
+	return map[string]types.AttributeValue{"pk": stringValue("SCHEDULE"), "sk": stringValue(seasonKey(season))}
+}
 func playerKey(id player.ID) string { return "PLAYER#" + string(id) }
 func seasonKey(season int) string   { return fmt.Sprintf("SEASON#%04d", season) }
 func gameKey(record history.PlayerGameSnaps) string {

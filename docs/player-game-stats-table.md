@@ -45,6 +45,22 @@ Stable dimensions are top-level attributes. Every other numeric CSV column is
 stored in the `metrics` map and every non-numeric column in `attributes`, so
 nflverse can add fields without requiring a DynamoDB schema migration.
 
+The NFL schedule is derived from each season's snap-count feed, which lists
+every played game, and is stored as one item per season:
+
+```text
+pk = SCHEDULE
+sk = SEASON#<season>
+```
+
+The item's `games` list holds each game's `season`, `week`, `game_id`,
+`game_type` and a `teams` string set (about 285 games, roughly 20 KB, well
+under DynamoDB's 400 KB item limit). A single PutItem is atomic, so a failed
+refresh leaves the previous schedule in place rather than a partial season.
+The item has no `gsi1pk`. `sync_snap_counts` rewrites it on every run, even
+when the snap dataset is unchanged, so re-running it backfills older seasons.
+Free-agent trends read it to find the most recent regular-season weeks.
+
 Depth-chart history uses another companion item:
 
 ```text
