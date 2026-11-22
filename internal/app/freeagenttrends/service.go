@@ -67,11 +67,20 @@ type Result struct {
 	ExcludedByAge             int      `json:"excluded_by_age"`
 	// ExcludedByRecency counts players whose recent games fall outside the
 	// window; they are left out of Trends whatever their signal.
-	ExcludedByRecency int                 `json:"excluded_by_recency"`
-	RecencyWindow     *RecencyWindow      `json:"recency_window,omitempty"`
-	Method            string              `json:"method"`
-	Config            usage.Config        `json:"config"`
-	Trends            []usage.PlayerTrend `json:"trends"`
+	ExcludedByRecency int            `json:"excluded_by_recency"`
+	RecencyWindow     *RecencyWindow `json:"recency_window,omitempty"`
+	Method            string         `json:"method"`
+	Config            usage.Config   `json:"config"`
+	Trends            []Trend        `json:"trends"`
+}
+
+// Trend is the model's trend plus the player's Pro Football Reference ID,
+// which the frontend turns into a game-log link. Embedding keeps the JSON flat.
+type Trend struct {
+	usage.PlayerTrend
+	// PFRPlayerID is the source player ID on the player's most recent snap
+	// fact; empty when no fact carries one.
+	PFRPlayerID string `json:"pfr_player_id,omitempty"`
 }
 
 type Service struct {
@@ -200,7 +209,8 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("analyze defensive snap trends: %w", err)
 	}
-	top := make([]usage.PlayerTrend, 0, limit)
+	pfrIDs := latestPFRPlayerIDs(facts)
+	top := make([]Trend, 0, limit)
 	for _, trend := range report.Trends {
 		if trend.Signal != usage.SignalRising {
 			continue
@@ -208,7 +218,7 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 		if _, ok := stale[player.ID(trend.PlayerID)]; ok {
 			continue
 		}
-		top = append(top, trend)
+		top = append(top, Trend{PlayerTrend: trend, PFRPlayerID: pfrIDs[player.ID(trend.PlayerID)]})
 		if len(top) == limit {
 			break
 		}
@@ -220,6 +230,26 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 		ExcludedByAge: report.Summary.ExcludedByAge, ExcludedByRecency: len(stale), RecencyWindow: window,
 		Method: report.Method, Config: report.Config, Trends: top,
 	}, nil
+}
+
+// latestPFRPlayerIDs maps each player to the PFR ID on his most recent snap
+// fact, so an identity alias change resolves to the current ID.
+func latestPFRPlayerIDs(facts []history.PlayerGameSnaps) map[player.ID]string {
+	latest := make(map[player.ID]seasonWeek)
+	ids := make(map[player.ID]string)
+	for _, fact := range facts {
+		id := strings.TrimSpace(fact.SourcePlayerID)
+		if id == "" {
+			continue
+		}
+		at := seasonWeek{fact.Season, fact.Week}
+		if previous, ok := latest[fact.PlayerID]; ok && at.before(previous) {
+			continue
+		}
+		latest[fact.PlayerID] = at
+		ids[fact.PlayerID] = id
+	}
+	return ids
 }
 
 type seasonWeek struct{ season, week int }
