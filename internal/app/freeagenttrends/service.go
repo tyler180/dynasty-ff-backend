@@ -20,6 +20,14 @@ const (
 	defaultLimit = 10
 	maxLimit     = 50
 	queryBatch   = 100
+
+	// DefaultRecencyWeeks is how many of the most recent NFL regular-season
+	// weeks a free agent's recent games must fall within.
+	DefaultRecencyWeeks = 6
+	maxRecencyWeeks     = 18
+	// recentGames matches the usage model's default recent window, which this
+	// service does not override.
+	recentGames = 3
 )
 
 type FreeAgentSource interface {
@@ -34,6 +42,18 @@ type Request struct {
 	// MaxAge, when positive, keeps only players younger than MaxAge today.
 	// Players without a known birthdate are kept with an unknown age.
 	MaxAge int
+	// RecencyWeeks keeps only players whose last three regular-season games
+	// all fall within the most recent RecencyWeeks NFL regular-season weeks
+	// played. Nil uses DefaultRecencyWeeks; zero disables the filter.
+	RecencyWeeks *int
+}
+
+// RecencyWindow is the oldest NFL regular-season week a player's recent games
+// may fall in.
+type RecencyWindow struct {
+	Weeks      int `json:"weeks"`
+	FromSeason int `json:"from_season"`
+	FromWeek   int `json:"from_week"`
 }
 
 type Result struct {
@@ -45,6 +65,8 @@ type Result struct {
 	PlayersWithSnapData       int                 `json:"players_with_snap_data"`
 	UnresolvedMFLPlayerIDs    []string            `json:"unresolved_mfl_player_ids,omitempty"`
 	ExcludedByAge             int                 `json:"excluded_by_age"`
+	ExcludedByRecency         int                 `json:"excluded_by_recency"`
+	RecencyWindow             *RecencyWindow      `json:"recency_window,omitempty"`
 	Method                    string              `json:"method"`
 	Config                    usage.Config        `json:"config"`
 	Trends                    []usage.PlayerTrend `json:"trends"`
@@ -54,6 +76,8 @@ type Service struct {
 	FreeAgents FreeAgentSource
 	Identities identity.BulkResolver
 	Snaps      history.SnapReader
+	// Schedule supplies the NFL weeks played; required unless recency is off.
+	Schedule history.ScheduleReader
 	// Now returns the current time; ages are computed on its UTC date. Nil uses time.Now.
 	Now func() time.Time
 }
@@ -78,6 +102,16 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 	}
 	if request.MaxAge < 0 || request.MaxAge > 60 {
 		return Result{}, fmt.Errorf("max_age must be between 0 (no filter) and 60")
+	}
+	recencyWeeks := DefaultRecencyWeeks
+	if request.RecencyWeeks != nil {
+		recencyWeeks = *request.RecencyWeeks
+	}
+	if recencyWeeks < 0 || recencyWeeks > maxRecencyWeeks {
+		return Result{}, fmt.Errorf("recency_weeks must be between 0 (no filter) and %d", maxRecencyWeeks)
+	}
+	if recencyWeeks > 0 && s.Schedule == nil {
+		return Result{}, fmt.Errorf("an NFL schedule source is required for recency filtering")
 	}
 
 	available, err := s.FreeAgents.DefensiveFreeAgents(ctx, request.Year, request.LeagueID)
@@ -129,8 +163,35 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 		}
 		facts = append(facts, batch...)
 	}
-	observations := make([]usage.Observation, 0, len(facts))
 	withSnaps := make(map[string]struct{})
+	for _, fact := range facts {
+		withSnaps[string(fact.PlayerID)] = struct{}{}
+	}
+	var window *RecencyWindow
+	excludedByRecency := 0
+	if recencyWeeks > 0 {
+		window, err = s.recencyWindow(ctx, request.Year, recencyWeeks)
+		if err != nil {
+			return Result{}, err
+		}
+		stale := staleByRecency(facts, *window)
+		excludedByRecency = len(stale)
+		kept := modelPlayers[:0]
+		for _, modelPlayer := range modelPlayers {
+			if _, ok := stale[player.ID(modelPlayer.ID)]; !ok {
+				kept = append(kept, modelPlayer)
+			}
+		}
+		modelPlayers = kept
+		keptFacts := facts[:0]
+		for _, fact := range facts {
+			if _, ok := stale[fact.PlayerID]; !ok {
+				keptFacts = append(keptFacts, fact)
+			}
+		}
+		facts = keptFacts
+	}
+	observations := make([]usage.Observation, 0, len(facts))
 	for _, fact := range facts {
 		observations = append(observations, usage.Observation{
 			PlayerID: string(fact.PlayerID), GameID: fact.GameID, Season: fact.Season, Week: fact.Week,
@@ -138,7 +199,6 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 			DefenseSnaps: fact.DefenseSnaps, TeamDefenseSnaps: fact.TeamDefenseSnaps,
 			DefenseSnapPct: fact.DefenseSnapPct,
 		})
-		withSnaps[string(fact.PlayerID)] = struct{}{}
 	}
 	now := time.Now
 	if s.Now != nil {
@@ -165,9 +225,64 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 		LeagueID: request.LeagueID, LeagueSeason: request.Year, SnapSeasons: seasons,
 		AvailableDefensivePlayers: len(available), ResolvedPlayers: len(modelPlayers),
 		PlayersWithSnapData: len(withSnaps), UnresolvedMFLPlayerIDs: unresolved,
-		ExcludedByAge: report.Summary.ExcludedByAge,
-		Method:        report.Method, Config: report.Config, Trends: top,
+		ExcludedByAge: report.Summary.ExcludedByAge, ExcludedByRecency: excludedByRecency, RecencyWindow: window,
+		Method: report.Method, Config: report.Config, Trends: top,
 	}, nil
+}
+
+type seasonWeek struct{ season, week int }
+
+func (w seasonWeek) before(other seasonWeek) bool {
+	return w.season < other.season || (w.season == other.season && w.week < other.week)
+}
+
+// recencyWindow finds the oldest of the most recent `weeks` NFL
+// regular-season weeks played, across the league season and the one before.
+func (s Service) recencyWindow(ctx context.Context, year, weeks int) (*RecencyWindow, error) {
+	games, err := s.Schedule.SeasonSchedules(ctx, []int{year - 1, year})
+	if err != nil {
+		return nil, fmt.Errorf("load NFL schedule: %w", err)
+	}
+	played := make(map[seasonWeek]struct{})
+	for _, game := range games {
+		if game.IsRegularSeason() {
+			played[seasonWeek{game.Season, game.Week}] = struct{}{}
+		}
+	}
+	if len(played) == 0 {
+		return nil, fmt.Errorf("no NFL regular-season games stored for %d-%d; run sync_snap_counts for those seasons", year-1, year)
+	}
+	ordered := make([]seasonWeek, 0, len(played))
+	for week := range played {
+		ordered = append(ordered, week)
+	}
+	sort.Slice(ordered, func(i, j int) bool { return ordered[j].before(ordered[i]) })
+	oldest := ordered[min(weeks, len(ordered))-1]
+	return &RecencyWindow{Weeks: weeks, FromSeason: oldest.season, FromWeek: oldest.week}, nil
+}
+
+// staleByRecency returns players whose last three regular-season games are
+// not all within the window. Players with no regular-season games are left
+// for the model, which reports them as lacking data.
+func staleByRecency(facts []history.PlayerGameSnaps, window RecencyWindow) map[player.ID]struct{} {
+	games := make(map[player.ID][]seasonWeek)
+	for _, fact := range facts {
+		if history.IsRegularSeasonGameType(fact.GameType) {
+			games[fact.PlayerID] = append(games[fact.PlayerID], seasonWeek{fact.Season, fact.Week})
+		}
+	}
+	from := seasonWeek{window.FromSeason, window.FromWeek}
+	stale := make(map[player.ID]struct{})
+	for id, played := range games {
+		sort.Slice(played, func(i, j int) bool { return played[j].before(played[i]) })
+		for _, game := range played[:min(recentGames, len(played))] {
+			if game.before(from) {
+				stale[id] = struct{}{}
+				break
+			}
+		}
+	}
+	return stale
 }
 
 func normalizedSeasons(year int, seasons []int) []int {
