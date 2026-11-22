@@ -200,6 +200,15 @@ func decodeDefensiveFreeAgentTrendRequest(query map[string]string) (Request, err
 		}
 		request.RecencyWeeks = &weeks
 	}
+	for _, value := range strings.Split(query["position_groups"], ",") {
+		switch group := strings.ToUpper(strings.TrimSpace(value)); group {
+		case "":
+		case "DL", "LB", "DB":
+			request.PositionGroups = append(request.PositionGroups, group)
+		default:
+			return Request{}, fmt.Errorf("position_groups must be comma-separated DL, LB or DB")
+		}
+	}
 	return request, nil
 }
 

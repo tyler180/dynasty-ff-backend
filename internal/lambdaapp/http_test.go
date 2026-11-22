@@ -366,3 +366,40 @@ func TestHTTPHandlerParsesDefensiveFreeAgentTrendRecencyWeeks(t *testing.T) {
 		})
 	}
 }
+
+func TestHTTPHandlerParsesDefensiveFreeAgentTrendPositionGroups(t *testing.T) {
+	tests := []struct {
+		name       string
+		value      string
+		wantStatus int
+		want       []string
+	}{
+		{"omitted shows every group", "", 200, nil},
+		{"one group", "LB", 200, []string{"LB"}},
+		{"several, lower case and spaced", "dl, db", 200, []string{"DL", "DB"}},
+		{"empty entries are skipped", "LB,,", 200, []string{"LB"}},
+		{"offensive position", "QB", 400, nil},
+		{"specific position", "CB", 400, nil},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actions := &recordingActionHandler{result: Response{Action: ActionTopDefensiveFreeAgentTrends, Status: "ok"}}
+			handler, err := NewHTTPHandler(actions)
+			if err != nil {
+				t.Fatal(err)
+			}
+			event := httpEvent("GET", "/v1/free-agents/defensive-trends")
+			event.QueryStringParameters = map[string]string{"season": "2026", "league_id": "79286"}
+			if test.value != "" {
+				event.QueryStringParameters["position_groups"] = test.value
+			}
+			response := handler.Handle(context.Background(), event)
+			if response.StatusCode != test.wantStatus {
+				t.Fatalf("status = %d, want %d (body %s)", response.StatusCode, test.wantStatus, response.Body)
+			}
+			if test.wantStatus == 200 && !reflect.DeepEqual(actions.request.PositionGroups, test.want) {
+				t.Fatalf("position groups = %v, want %v", actions.request.PositionGroups, test.want)
+			}
+		})
+	}
+}

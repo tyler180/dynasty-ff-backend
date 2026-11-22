@@ -46,6 +46,10 @@ type Request struct {
 	// all fall within the most recent RecencyWeeks NFL regular-season weeks
 	// played. Nil uses DefaultRecencyWeeks; zero disables the filter.
 	RecencyWeeks *int
+	// PositionGroups keeps only players in these groups (DL, LB, DB). Empty
+	// keeps all three. Like recency, it filters the output, so Limit counts
+	// players in the chosen groups.
+	PositionGroups []string
 }
 
 // RecencyWindow is the oldest NFL regular-season week a player's recent games
@@ -69,9 +73,11 @@ type Result struct {
 	// window; they are left out of Trends whatever their signal.
 	ExcludedByRecency int            `json:"excluded_by_recency"`
 	RecencyWindow     *RecencyWindow `json:"recency_window,omitempty"`
-	Method            string         `json:"method"`
-	Config            usage.Config   `json:"config"`
-	Trends            []Trend        `json:"trends"`
+	// PositionGroups echoes the requested groups; omitted when all are shown.
+	PositionGroups []string     `json:"position_groups,omitempty"`
+	Method         string       `json:"method"`
+	Config         usage.Config `json:"config"`
+	Trends         []Trend      `json:"trends"`
 }
 
 // Trend is the model's trend plus the player's Pro Football Reference ID,
@@ -123,6 +129,10 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 	}
 	if recencyWeeks > 0 && s.Schedule == nil {
 		return Result{}, fmt.Errorf("an NFL schedule source is required for recency filtering")
+	}
+	groups, err := normalizedPositionGroups(request.PositionGroups)
+	if err != nil {
+		return Result{}, err
 	}
 
 	available, err := s.FreeAgents.DefensiveFreeAgents(ctx, request.Year, request.LeagueID)
@@ -218,6 +228,9 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 		if _, ok := stale[player.ID(trend.PlayerID)]; ok {
 			continue
 		}
+		if !groups.includes(trend.PositionGroup) {
+			continue
+		}
 		top = append(top, Trend{PlayerTrend: trend, PFRPlayerID: pfrIDs[player.ID(trend.PlayerID)]})
 		if len(top) == limit {
 			break
@@ -228,8 +241,55 @@ func (s Service) Analyze(ctx context.Context, request Request) (Result, error) {
 		AvailableDefensivePlayers: len(available), ResolvedPlayers: len(modelPlayers),
 		PlayersWithSnapData: len(withSnaps), UnresolvedMFLPlayerIDs: unresolved,
 		ExcludedByAge: report.Summary.ExcludedByAge, ExcludedByRecency: len(stale), RecencyWindow: window,
-		Method: report.Method, Config: report.Config, Trends: top,
+		PositionGroups: groups.list(), Method: report.Method, Config: report.Config, Trends: top,
 	}, nil
+}
+
+var defensivePositionGroups = []string{"DL", "LB", "DB"}
+
+// positionGroups is the requested filter; nil means every defensive group.
+type positionGroups map[string]struct{}
+
+// normalizedPositionGroups upper-cases and de-duplicates the requested groups
+// and rejects anything other than DL, LB and DB.
+func normalizedPositionGroups(values []string) (positionGroups, error) {
+	var groups positionGroups
+	for _, value := range values {
+		group := strings.ToUpper(strings.TrimSpace(value))
+		if group == "" {
+			continue
+		}
+		if group != "DL" && group != "LB" && group != "DB" {
+			return nil, fmt.Errorf("position_groups must be DL, LB or DB, got %q", value)
+		}
+		if groups == nil {
+			groups = positionGroups{}
+		}
+		groups[group] = struct{}{}
+	}
+	return groups, nil
+}
+
+func (g positionGroups) includes(group string) bool {
+	if g == nil {
+		return true
+	}
+	_, ok := g[strings.ToUpper(strings.TrimSpace(group))]
+	return ok
+}
+
+// list returns the groups in DL, LB, DB order, or nil when unfiltered.
+func (g positionGroups) list() []string {
+	if g == nil {
+		return nil
+	}
+	list := make([]string, 0, len(g))
+	for _, group := range defensivePositionGroups {
+		if _, ok := g[group]; ok {
+			list = append(list, group)
+		}
+	}
+	return list
 }
 
 // latestPFRPlayerIDs maps each player to the PFR ID on his most recent snap
