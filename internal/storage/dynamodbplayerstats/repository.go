@@ -449,14 +449,15 @@ func (r *Repository) queryPlayer(ctx context.Context, playerID player.ID, season
 	return result, nil
 }
 
-// PutSeasonSchedule replaces one season's scheduled-game items, deleting games
-// no longer present upstream.
+// PutSeasonSchedule stores a season's games as a single item. One PutItem is
+// atomic, so a failed refresh leaves the previous schedule intact instead of
+// publishing a partial season.
 func (r *Repository) PutSeasonSchedule(ctx context.Context, season int, games []history.ScheduledGame) error {
 	if len(games) == 0 {
 		return fmt.Errorf("at least one scheduled game is required")
 	}
-	writes := make([]types.WriteRequest, 0, len(games))
-	incoming := make(map[string]struct{}, len(games))
+	seen := make(map[string]struct{}, len(games))
+	encoded := make([]types.AttributeValue, 0, len(games))
 	for _, game := range games {
 		if err := game.Validate(); err != nil {
 			return err
@@ -464,25 +465,20 @@ func (r *Repository) PutSeasonSchedule(ctx context.Context, season int, games []
 		if game.Season != season {
 			return fmt.Errorf("scheduled games must belong to season %d", season)
 		}
-		item := encodeScheduledGame(game)
-		if _, exists := incoming[itemKey(item)]; exists {
+		key := fmt.Sprintf("%02d#%s", game.Week, game.GameID)
+		if _, exists := seen[key]; exists {
 			return fmt.Errorf("duplicate scheduled game %s in season %d week %d", game.GameID, game.Season, game.Week)
 		}
-		incoming[itemKey(item)] = struct{}{}
-		writes = append(writes, types.WriteRequest{PutRequest: &types.PutRequest{Item: item}})
+		seen[key] = struct{}{}
+		encoded = append(encoded, encodeScheduledGame(game))
 	}
-	existing, err := r.scheduleItems(ctx, season)
-	if err != nil {
-		return err
-	}
-	for _, item := range existing {
-		key := map[string]types.AttributeValue{"pk": item["pk"], "sk": item["sk"]}
-		if _, ok := incoming[itemKey(key)]; !ok {
-			writes = append(writes, types.WriteRequest{DeleteRequest: &types.DeleteRequest{Key: key}})
-		}
-	}
-	if err := r.batchWrite(ctx, writes); err != nil {
-		return fmt.Errorf("replace %d schedule in DynamoDB: %w", season, err)
+	item := scheduleKey(season)
+	item["entity_type"] = stringValue("season_schedule")
+	item["season"] = numberValue(season)
+	item["games"] = &types.AttributeValueMemberL{Value: encoded}
+	item["updated_at"] = stringValue(time.Now().UTC().Format(time.RFC3339Nano))
+	if _, err := r.client.PutItem(ctx, &dynamodb.PutItemInput{TableName: aws.String(r.tableName), Item: item}); err != nil {
+		return fmt.Errorf("put %d schedule in DynamoDB: %w", season, err)
 	}
 	return nil
 }
@@ -490,45 +486,32 @@ func (r *Repository) PutSeasonSchedule(ctx context.Context, season int, games []
 func (r *Repository) SeasonSchedules(ctx context.Context, seasons []int) ([]history.ScheduledGame, error) {
 	var result []history.ScheduledGame
 	for _, season := range seasons {
-		items, err := r.scheduleItems(ctx, season)
+		output, err := r.client.GetItem(ctx, &dynamodb.GetItemInput{
+			TableName: aws.String(r.tableName), ConsistentRead: aws.Bool(true), Key: scheduleKey(season),
+		})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get %d schedule from DynamoDB: %w", season, err)
 		}
-		for _, item := range items {
-			game, err := decodeScheduledGame(item)
+		if len(output.Item) == 0 {
+			continue
+		}
+		if optionalString(output.Item, "entity_type") != "season_schedule" {
+			return nil, fmt.Errorf("%d schedule item has unexpected entity type %q", season, optionalString(output.Item, "entity_type"))
+		}
+		games, ok := output.Item["games"].(*types.AttributeValueMemberL)
+		if !ok {
+			return nil, fmt.Errorf("%d schedule item has no games list", season)
+		}
+		for index, value := range games.Value {
+			game, err := decodeScheduledGame(value)
 			if err != nil {
-				return nil, fmt.Errorf("decode %d scheduled game %s: %w", season, optionalString(item, "sk"), err)
+				return nil, fmt.Errorf("decode %d scheduled game %d: %w", season, index, err)
+			}
+			if game.Season != season {
+				return nil, fmt.Errorf("%d schedule item holds a %d game %s", season, game.Season, game.GameID)
 			}
 			result = append(result, game)
 		}
-	}
-	return result, nil
-}
-
-func (r *Repository) scheduleItems(ctx context.Context, season int) ([]map[string]types.AttributeValue, error) {
-	var result []map[string]types.AttributeValue
-	var startKey map[string]types.AttributeValue
-	for {
-		output, err := r.client.Query(ctx, &dynamodb.QueryInput{
-			TableName:              aws.String(r.tableName),
-			KeyConditionExpression: aws.String("pk = :pk AND begins_with(sk, :prefix)"),
-			ExpressionAttributeValues: map[string]types.AttributeValue{
-				":pk": stringValue(scheduleKey(season)), ":prefix": stringValue("GAME#"),
-			},
-			ExclusiveStartKey: startKey,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("query %d schedule from DynamoDB: %w", season, err)
-		}
-		for _, item := range output.Items {
-			if optionalString(item, "entity_type") == "scheduled_game" {
-				result = append(result, item)
-			}
-		}
-		if len(output.LastEvaluatedKey) == 0 {
-			break
-		}
-		startKey = output.LastEvaluatedKey
 	}
 	return result, nil
 }
@@ -906,18 +889,22 @@ func decodeDepthChart(item map[string]types.AttributeValue) (history.DepthChartO
 	return record, record.Validate()
 }
 
-func encodeScheduledGame(game history.ScheduledGame) map[string]types.AttributeValue {
+func encodeScheduledGame(game history.ScheduledGame) types.AttributeValue {
 	teams := append([]string(nil), game.Teams...)
 	sort.Strings(teams)
-	return map[string]types.AttributeValue{
-		"pk": stringValue(scheduleKey(game.Season)), "sk": stringValue(fmt.Sprintf("GAME#%02d#%s", game.Week, game.GameID)),
-		"entity_type": stringValue("scheduled_game"), "season": numberValue(game.Season), "week": numberValue(game.Week),
+	return &types.AttributeValueMemberM{Value: map[string]types.AttributeValue{
+		"season": numberValue(game.Season), "week": numberValue(game.Week),
 		"game_id": stringValue(game.GameID), "game_type": stringValue(game.GameType),
 		"teams": &types.AttributeValueMemberSS{Value: teams},
-	}
+	}}
 }
 
-func decodeScheduledGame(item map[string]types.AttributeValue) (history.ScheduledGame, error) {
+func decodeScheduledGame(value types.AttributeValue) (history.ScheduledGame, error) {
+	member, ok := value.(*types.AttributeValueMemberM)
+	if !ok {
+		return history.ScheduledGame{}, fmt.Errorf("scheduled game is not a map")
+	}
+	item := member.Value
 	game := history.ScheduledGame{GameID: optionalString(item, "game_id"), GameType: optionalString(item, "game_type")}
 	var err error
 	if game.Season, err = optionalInt(item, "season"); err != nil {
@@ -933,7 +920,9 @@ func decodeScheduledGame(item map[string]types.AttributeValue) (history.Schedule
 	return game, game.Validate()
 }
 
-func scheduleKey(season int) string { return fmt.Sprintf("SCHEDULE#SEASON#%04d", season) }
+func scheduleKey(season int) map[string]types.AttributeValue {
+	return map[string]types.AttributeValue{"pk": stringValue("SCHEDULE"), "sk": stringValue(seasonKey(season))}
+}
 func playerKey(id player.ID) string { return "PLAYER#" + string(id) }
 func seasonKey(season int) string   { return fmt.Sprintf("SEASON#%04d", season) }
 func gameKey(record history.PlayerGameSnaps) string {
